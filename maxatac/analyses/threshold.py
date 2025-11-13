@@ -15,7 +15,7 @@ import logging
 
 def extract_pred_gs_bw(bigwig_file, training_data_dict, chrom_name, chrom_length, bin_count):
     start = time.time()
-    bw_name = bigwig_file.split("/")[6]
+    bw_name = bigwig_file.split("/")[-1]
     chrom_vals = get_bigwig_stats(bigwig_file, chrom_name, chrom_length, bin_count)
     print(training_data_dict[bigwig_file])
     
