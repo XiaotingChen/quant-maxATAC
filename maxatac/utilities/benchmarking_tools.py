@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 from maxatac.utilities.genome_tools import load_bigwig, chromosome_blacklist_mask, import_prediction_array_fn, import_quant_goldstandard_array_fn
 from sklearn import metrics
-from sklearn.metrics import precision_recall_curve, r2_score
+from sklearn.metrics import precision_recall_curve, r2_score, mean_absolute_error
 from scipy import stats
 from scipy.stats import pearsonr, spearmanr
 from maxatac.utilities.system_tools import remove_tags
@@ -230,10 +230,16 @@ class calculate_R2_pearson_spearman(object):
             self.prediction_array[self.blacklist_mask]
             )
 
+        logging.info("Calculate MAE")
+        mae_val = mean_absolute_error(
+            self.quant_goldstandard_array[self.blacklist_mask],
+            self.prediction_array[self.blacklist_mask]
+        )
 
 
-        R2_Sp_P_df = pd.DataFrame([[R2_pred, pearson_score, pearson_pval, spearman_score, spearman_pval]],
-                                  columns=['R2_pred', 'pearson', 'pearson_pval', 'spearman', 'spearman_pval'])
+
+        R2_Sp_P_df = pd.DataFrame([[mae_val, R2_pred, pearson_score, pearson_pval, spearman_score, spearman_pval]],
+                                  columns=['MAE', 'R2_pred', 'pearson', 'pearson_pval', 'spearman', 'spearman_pval'])
 
         R2_Sp_P_df.to_csv(self.results_location, sep='\t', index=None, float_format='%.6e')
 
