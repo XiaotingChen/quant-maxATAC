@@ -187,7 +187,8 @@ def get_dilated_cnn(
         target_scale_factor=1,
         dense_b=False,
         weights=None,
-        loss=LOSS
+        loss=LOSS,
+        wandb_config={}
 ):
     """
     If weights are provided they will be loaded into created model
@@ -283,7 +284,7 @@ def get_dilated_cnn(
                 lr=adam_learning_rate,
                 beta_1=adam_beta_1,
                 beta_2=adam_beta_2,
-                decay=adam_decay
+                weight_decay=adam_decay
             ),
             loss=loss_function,
             metrics=[dice_coef]
@@ -296,7 +297,7 @@ def get_dilated_cnn(
 
         elif loss == "pearsonr_mse":
             from maxatac.utilities.losses import pearsonr_mse
-            loss_function = pearsonr_mse()
+            loss_function = pearsonr_mse(alpha=wandb_config.pearsonr_mse_alpha)
 
         elif loss == "pearsonr_poisson":
             from maxatac.utilities.losses import pearsonr_poisson
@@ -339,7 +340,7 @@ def get_dilated_cnn(
 
         elif loss == "cauchy_lf":
             from maxatac.utilities.losses import cauchy_lf
-            loss_function = cauchy_lf()
+            loss_function = cauchy_lf(gamma=wandb_config.cauchy_lf_gamma)
 
         else:
             from maxatac.utilities.losses import mse
@@ -355,7 +356,7 @@ def get_dilated_cnn(
                 lr=adam_learning_rate,
                 beta_1=adam_beta_1,
                 beta_2=adam_beta_2,
-                decay=adam_decay
+                weight_decay=adam_decay
             ),
             run_eagerly=True, # TODO: for debugging loss fn remove
             loss=loss_function,

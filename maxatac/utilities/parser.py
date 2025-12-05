@@ -607,6 +607,60 @@ def get_parser():
                               help="Chromosome sizes file"
                               )
 
+    train_parser.add_argument("--wandb_proj_name",
+                              dest="wandb_proj_name",
+                              type=str,
+                              default='maxATAC quant HPO',
+                              help="wandb project name to use"
+                              )
+
+    train_parser.add_argument("--wandb_sweep_name",
+                              dest="wandb_sweep_name",
+                              type=str,
+                              default='run 001',
+                              help="wandb run name to use"
+                              )
+
+    train_parser.add_argument("--wandb_run_id",
+                              dest="wandb_run_id",
+                              default=None,
+                              help="wandb run id for resuming"
+                              )
+
+    train_parser.add_argument("--wandb_notes",
+                              dest="wandb_notes",
+                              type=str,
+                              default='',
+                              help="wandb run notes"
+                              )
+
+    train_parser.add_argument("--wandb_group_name",
+                              dest="wandb_group_name",
+                              type=str,
+                              default='group a',
+                              help="wandb group name to use"
+                              )
+
+    train_parser.add_argument("--wandb_tag",
+                              dest="wandb_tag",
+                              type=str,
+                              default='tag 1',
+                              help="wandb tag"
+                              )
+
+    train_parser.add_argument("--wandb_count",
+                              dest="wandb_count",
+                              type=int,
+                              default=20,
+                              help="Number of evaluations to run"
+                              )
+
+    train_parser.add_argument("--wandb_parameter_list",
+                              dest="wandb_parameter_list",
+                              nargs='+',
+                              type=float,
+                              help="Parameter grid to search"
+                              )
     #############################################
     # Normalize parser
     #############################################
@@ -1218,7 +1272,8 @@ def parse_arguments(argsl, cwd_abs_path=None):
                 "minimum", "test_cell_lines", "rand_ratio",
                 "train_tf", "arch", "quant","batch_size", "save_roi",
                 "val_batch_size", "target_scale_factor", "blacklist", "chrom_sizes",
-                "output_activation", "dense", "shuffle_cell_type", "rev_comp", "genome", "loss", "pred_gs_meta"
+                "output_activation", "dense", "shuffle_cell_type", "rev_comp", "genome", "loss", "pred_gs_meta",
+                "wandb_proj_name","wandb_count","wandb_notes","wandb_group_name","wandb_sweep_name","wandb_run_id","wandb_tag","wandb_parameter_list"
             ],
             cwd_abs_path
         )

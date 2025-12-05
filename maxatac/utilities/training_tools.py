@@ -43,7 +43,8 @@ class MaxATACModel(object):
                  quant=False,
                  interpret=False,
                  interpret_cell_type="",
-                 loss="cross_entropy"
+                 loss="cross_entropy",
+                 wandb_config={}
                  ):
         """
         Initialize the maxATAC model with the input parameters and architecture
@@ -77,6 +78,7 @@ class MaxATACModel(object):
         self.quant = quant
         self.target_scale_factor = target_scale_factor
         self.loss = loss
+        self.wandb_config=wandb_config
 
         # Set the random seed for the model
         random.seed(seed)
@@ -110,7 +112,8 @@ class MaxATACModel(object):
                                    target_scale_factor=self.target_scale_factor,
                                    dense_b=self.dense,
                                    weights=self.weights,
-                                   loss=self.loss
+                                   loss=self.loss,
+                                   wandb_config=self.wandb_config
                                    )
         else:
             sys.exit("Model Architecture not specified correctly. Please check")
