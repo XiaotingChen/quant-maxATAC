@@ -85,19 +85,20 @@ name="mean_squared_error")
 '''
 
 class pearsonr_mse(tf.keras.losses.Loss):
-    def __init__(self, name="pearsonr_mse", **kwargs):
+    def __init__(self, alpha=0.001, name="pearsonr_mse", **kwargs):
         super().__init__(name=name)
-        self.alpha = kwargs.get('loss_params')
-        if not self.alpha:
-            print('ALPHA SET TO DEFAULT VALUE!')
-            self.alpha = 0.001 #best
+        # self.alpha = kwargs.get('loss_params')
+        # if not self.alpha:
+        #     print('ALPHA SET TO DEFAULT VALUE!')
+        #     self.alpha = 0.001 #best
+        self.alpha=alpha
     def call(self, y_true, y_pred):
         #multinomial part of loss function
         pr_loss = basenjipearsonr()
         mse_loss = mse()
         mse_raw = mse_loss(y_true, y_pred)
         #sum with weight
-        total_loss = pr_loss(y_true, y_pred) + self.alpha*mse_raw
+        total_loss = (1-self.alpha)*pr_loss(y_true, y_pred) + self.alpha*mse_raw
         return total_loss
 
 class pearsonr_poisson(tf.keras.losses.Loss):
@@ -130,7 +131,7 @@ class mse(tf.keras.losses.Loss):
         super().__init__(name=name)
 
     def call(self, y_true, y_pred):
-        print("value: ", tf.keras.losses.MSE(y_true,y_pred))
+        # print("value: ", tf.keras.losses.MSE(y_true,y_pred))
         return tf.keras.losses.MSE(y_true,y_pred)
 
 class multinomialnll(tf.keras.losses.Loss):
@@ -433,9 +434,9 @@ class kl_divergence(tf.keras.losses.Loss):
         return loss
 
 class cauchy_lf(tf.keras.losses.Loss):
-    def __init__(self, name="cauchy_lf", **kwargs):
+    def __init__(self, gamma=0.9, name="cauchy_lf", **kwargs):
         super().__init__(name=name)
-        self.gamma = 0.9
+        self.gamma = gamma
 
     def call(self, y_true, y_pred):
         """
