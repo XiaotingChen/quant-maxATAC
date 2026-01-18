@@ -12,22 +12,18 @@ from maxatac.utilities.system_tools import remove_tags
 import pybedtools
 from multiprocessing import Pool
 import multiprocessing
+import tqdm
 
 
 def Precision_for_Recall(df, percent_recall):
     percent_recall = percent_recall
-
     upper_lim_recall = df.iloc[(df['Recall'] - percent_recall).abs().argsort()[:2]].Recall.tolist()[0]
     lower_lim_recall = df.iloc[(df['Recall'] - percent_recall).abs().argsort()[:2]].Recall.tolist()[1]
-
     upper_lim_precision = df.iloc[(df['Recall'] - percent_recall).abs().argsort()[:2]].Precision.tolist()[0]
     lower_lim_precision = df.iloc[(df['Recall'] - percent_recall).abs().argsort()[:2]].Precision.tolist()[1]
-
     val = (upper_lim_precision * abs(percent_recall - upper_lim_recall) + lower_lim_precision * abs(
         percent_recall - lower_lim_recall)) / 2
-
     sp_precision = lower_lim_precision + val
-
     return sp_precision
 
 def calculate_sse(vector1, vector2):
@@ -335,7 +331,92 @@ class calculate_R2_pearson_spearman(object):
         logging.info("Saving R2_yisx")
         R2_yisx_Slope_df.to_csv(R2_yisx_Slope_df_location, sep='\t', index=None, float_format='%.6e')
 
+# masking v1_peak_gs array
+def peak_gs_array_to_member_array(array):
+  member_array=[]
+  positive_count=0
+  negative_count=0
+  for i in range(len(array)):
+    if i==0:
+      if array[i]==True:
+        positive_count+=1
+        member_array.append(positive_count)
+      if array[i]==False:
+        negative_count-=1
+        member_array.append(negative_count)
+    else:
+      if (array[i])==True:
+        if array[i-1]==True:
+          # positive_count+=1
+          member_array.append(positive_count) # same peak
+        else:
+          positive_count+=1
+          member_array.append(positive_count) # new peak
+      else:
+        negative_count-=1
+        member_array.append(negative_count)
+  member_array=np.asarray(member_array)
+  return member_array
 
+def cum_unique_count(arr):
+    seen_pos = set()
+    seen_neg = set()
+    tp_array = []
+    fp_array = []
+    for x in tqdm.tqdm(arr):
+        if x > 0:
+            seen_pos.add(x)
+        elif x < 0:
+            seen_neg.add(x)
+        tp_array.append(len(seen_pos))
+        fp_array.append(len(seen_neg))
+    return tp_array, fp_array
+
+def precision_recall_curve_peak_based(y_member, y_score):
+    # Convert to boolean
+    #y_true = np.asarray(y_true) #  == pos_label # no need to convert to binary label, e.g., for quant results
+    y_score = np.asarray(y_score)
+    y_member = np.asarray(y_member)
+    # membership of each 32bp bin, if certain 32bp bins belong to the same peak,
+    # they would have same positive value in the member array,
+    # if negative prediction, each has a unique negative value
+    #
+    # Sort by score descending
+    order = np.argsort(y_score)[::-1]
+    y_score = y_score[order]
+    #y_true = y_true[order]
+    y_member = y_member[order]
+    #
+    #
+    # Count positives
+    # total_positives = np.sum(y_true)
+    # Now count with unique member
+    total_positives = len(np.unique(y_member[np.where(y_member>0)]))  # how many unique positive membership ids (# of unique peaks) in the entire input array
+    total_negatives= len(np.unique(y_member[np.where(y_member<0)]))  # how many unique negative labeled membership ids in the entire input array
+    #
+    # Cumulative TP and FP
+    tp,fp=cum_unique_count(y_member)
+    tp=np.asarray(tp)
+    fp=np.asarray(fp)
+    #tp = np.cumsum(y_true)
+    #fp = np.cumsum(~y_true)
+    #
+    # Find indices where score changes
+    distinct_indices = np.where(np.diff(y_score))[0]
+    threshold_idxs = np.r_[distinct_indices, len(y_member) - 1]
+    #
+    # Thresholds
+    thresholds = y_score[threshold_idxs]
+    #
+    # Precision and recall
+    precision = tp[threshold_idxs] / (tp[threshold_idxs] + fp[threshold_idxs])
+    recall = tp[threshold_idxs] / total_positives
+    #
+    # Add endpoint
+    precision = np.r_[precision, 1.0]
+    recall = np.r_[recall, 0.0]
+    #
+    return precision, recall, thresholds
 
 class ChromosomeAUPRC(object):
     """
@@ -357,7 +438,8 @@ class ChromosomeAUPRC(object):
                  agg_function,
                  results_location,
                  round_predictions,
-                 plot=False
+                 plot=False,
+                 peak_based=False
                  ):
         """
         :param prediction_bw: Path to bigwig file containing maxATAC predictions
@@ -385,6 +467,7 @@ class ChromosomeAUPRC(object):
                                                         self.chromosome_length,
                                                         self.bin_count)
 
+        self.peak_based=peak_based
         self.__import_prediction_array__(round_prediction=round_predictions)
         self.__import_goldstandard_array__()
         self.__AUPRC__()
@@ -507,10 +590,17 @@ class ChromosomeAUPRC(object):
         """
         logging.info("Calculate precision-recall curve for " + self.chromosome)
 
-        self.precision, self.recall, self.thresholds = precision_recall_curve(
-            self.goldstandard_array[self.blacklist_mask],
-            self.prediction_array[self.blacklist_mask])
-
+        if self.peak_based==False:
+            self.precision, self.recall, self.thresholds = precision_recall_curve(
+                self.goldstandard_array[self.blacklist_mask],
+                self.prediction_array[self.blacklist_mask]
+            )
+        else:
+            # generate member array from gs
+            self.precision, self.recall, self.thresholds = precision_recall_curve_peak_based(
+                peak_gs_array_to_member_array(self.goldstandard_array[self.blacklist_mask]),
+                self.prediction_array[self.blacklist_mask]
+            )
         logging.info("Making DataFrame from results")
 
         # Create a dataframe from the results
@@ -528,19 +618,20 @@ class ChromosomeAUPRC(object):
 
         self.PR_CURVE_DF["AUPRC"] = self.AUPRC
 
-        # Calculate the total gold standard bins
-        logging.info("Calculate Total GoldStandard Bins")
+        if self.peak_based==False:
+            # Calculate the total gold standard bins
+            logging.info("Calculate Total GoldStandard Bins")
 
-        self.PR_CURVE_DF["Total_GoldStandard_Bins"] = len(np.argwhere(self.goldstandard_array == True))
+            self.PR_CURVE_DF["Total_GoldStandard_Bins"] = len(np.argwhere(self.goldstandard_array == True))
 
-        # Find the number of non-blacklisted bins in chr of interest
-        rand_bins = len(np.argwhere(self.blacklist_mask == True))
+            # Find the number of non-blacklisted bins in chr of interest
+            rand_bins = len(np.argwhere(self.blacklist_mask == True))
 
-        # Random Precision
-        self.PR_CURVE_DF['Random_AUPRC'] = self.PR_CURVE_DF['Total_GoldStandard_Bins'] / rand_bins
+            # Random Precision
+            self.PR_CURVE_DF['Random_AUPRC'] = self.PR_CURVE_DF['Total_GoldStandard_Bins'] / rand_bins
 
-        # Log2FC
-        self.PR_CURVE_DF['log2FC_AUPRC_Random_AUPRC'] = np.log2(self.PR_CURVE_DF["AUPRC"] / self.PR_CURVE_DF["Random_AUPRC"])
+            # Log2FC
+            self.PR_CURVE_DF['log2FC_AUPRC_Random_AUPRC'] = np.log2(self.PR_CURVE_DF["AUPRC"] / self.PR_CURVE_DF["Random_AUPRC"])
 
         # Precision at 10% Recall
         self.PR_CURVE_DF['Precision_at_10_Percent_Recall']=Precision_for_Recall(self.PR_CURVE_DF, 0.1)
