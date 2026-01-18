@@ -753,6 +753,13 @@ def get_parser():
                                   help="Gold Standard file"
                                   )
 
+    benchmark_parser.add_argument("--peak_based",
+                                  dest="peak_based",
+                                  action='store_true',
+                                  default=False,
+                                  help="Whether use peak-based Gold Standard instead of bin-based"
+                                  )
+
     benchmark_parser.add_argument("--quant",
                                   dest="quant",
                                   action='store_true',
@@ -1218,7 +1225,8 @@ def parse_arguments(argsl, cwd_abs_path=None):
                 "minimum", "test_cell_lines", "rand_ratio",
                 "train_tf", "arch", "quant","batch_size", "save_roi",
                 "val_batch_size", "target_scale_factor", "blacklist", "chrom_sizes",
-                "output_activation", "dense", "shuffle_cell_type", "rev_comp", "genome", "loss", "pred_gs_meta"
+                "output_activation", "dense", "shuffle_cell_type", "rev_comp", "genome", "loss", "pred_gs_meta",
+                "peak_based"
             ],
             cwd_abs_path
         )
