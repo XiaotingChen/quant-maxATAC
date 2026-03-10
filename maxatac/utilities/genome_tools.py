@@ -239,6 +239,31 @@ def chromosome_blacklist_mask(blacklist, chromosome, chromosome_length, nBins=Fa
                                                   numpy=True) != 1  # Convert to boolean array, select areas that are not 1
 
 
+def chromosome_whitelist_mask(whitelist, chromosome, chromosome_length, nBins=False, agg_method="max"):
+    """
+    Import the chromosome signal from a whitelist bigwig file and convert to a numpy array to use to include regions.
+    If a number of bins are provided, then the function will use the stats method from pyBigWig to bin the data.
+
+    :return: whitelist_mask: A np.array that has True for regions that are in the whitelist.
+    """
+    with load_bigwig(whitelist) as whitelist_bigwig_stream:
+        if nBins:
+            return np.array(whitelist_bigwig_stream.stats(chromosome,
+                                                          0,
+                                                          chromosome_length,
+                                                          type=agg_method,
+                                                          nBins=nBins
+                                                          ),
+                            dtype=float
+                            ) > 0
+
+        else:
+            return whitelist_bigwig_stream.values(chromosome,
+                                                  0,
+                                                  chromosome_length,
+                                                  numpy=True) > 0
+
+
 def filter_chrom_sizes(chrom_sizes_path, chromosomes, target_chrom_sizes_file):
     df = pd.read_table(chrom_sizes_path, header=None, names=["chr", "length"])
     
