@@ -100,7 +100,7 @@ def get_bigwig_values(bigwig_path, chrom_name, chrom_end, chrom_start=0):
     :return: Bigwig values from the region given
     """
     with pyBigWig.open(bigwig_path) as input_bw:
-        return np.nan_to_num(input_bw.values(chrom_name, chrom_start, chrom_end, numpy=True))
+        return np.nan_to_num(input_bw.values(chrom_name, chrom_start, chrom_end))
 
 
 def get_bigwig_stats(bigwig_path, chrom_name, chrom_end, bin_count, agg_function="max"):
