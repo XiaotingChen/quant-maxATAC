@@ -4,7 +4,6 @@ import timeit
 from maxatac.utilities.system_tools import get_dir, Mute
 
 with Mute():
-    from maxatac.utilities.genome_tools import chromosome_blacklist_mask
     from maxatac.utilities.benchmarking_tools import calculate_R2_pearson_spearman, ChromosomeAUPRC
 
 
@@ -62,6 +61,7 @@ def run_benchmarking(args):
                                           args.agg_function,
                                           results_filename2,
                                           args.blacklist_bw,
+                                          args.whitelist_bw,
                                           args.quant_gs_null
                                           )
     else:
@@ -74,6 +74,7 @@ def run_benchmarking(args):
             ChromosomeAUPRC(args.prediction,
                             args.gold_standard,
                             args.blacklist_bw,
+                            args.whitelist_bw,
                             chromosome,
                             args.bin_size,
                             args.agg_function,

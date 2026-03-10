@@ -828,6 +828,13 @@ def get_parser():
                                   help="The blacklisted regions to exclude in BigWig format"
                                   )
 
+    benchmark_parser.add_argument("--whitelist_bw",
+                                  dest="whitelist_bw",
+                                  type=str,
+                                  default=None,
+                                  help="The whitelisted regions to include in BigWig format"
+                                  )
+
     benchmark_parser.add_argument("--plot", "--plot",
                                   dest="plot",
                                   action="store_true",

@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
-from maxatac.utilities.genome_tools import load_bigwig, chromosome_blacklist_mask, import_prediction_array_fn, import_quant_goldstandard_array_fn
+from maxatac.utilities.genome_tools import load_bigwig, chromosome_blacklist_mask, chromosome_whitelist_mask, import_prediction_array_fn, import_quant_goldstandard_array_fn
 from sklearn import metrics
 from sklearn.metrics import precision_recall_curve, r2_score, mean_absolute_error
 from scipy import stats
@@ -65,6 +65,7 @@ class calculate_R2_pearson_spearman(object):
                  agg_function,
                  results_location,
                  blacklist_bw,
+                 whitelist_bw,
                  quant_gs_null
                  ):
 
@@ -91,6 +92,15 @@ class calculate_R2_pearson_spearman(object):
                                                         self.chromosome,
                                                         self.chromosome_length,
                                                         self.bin_count)
+
+        if whitelist_bw:
+            self.blacklist_mask = np.logical_and(
+                self.blacklist_mask,
+                chromosome_whitelist_mask(whitelist_bw,
+                                          self.chromosome,
+                                          self.chromosome_length,
+                                          self.bin_count)
+            )
 
         '''self.blacklist_mask = chromosome_blacklist_mask(blacklist_bw,
                                                         self.chromosome,
@@ -433,6 +443,7 @@ class ChromosomeAUPRC(object):
                  prediction_bw,
                  goldstandard_bw,
                  blacklist_bw,
+                 whitelist_bw,
                  chromosome,
                  bin_size,
                  agg_function,
@@ -466,6 +477,15 @@ class ChromosomeAUPRC(object):
                                                         self.chromosome,
                                                         self.chromosome_length,
                                                         self.bin_count)
+
+        if whitelist_bw:
+            self.blacklist_mask = np.logical_and(
+                self.blacklist_mask,
+                chromosome_whitelist_mask(whitelist_bw,
+                                          self.chromosome,
+                                          self.chromosome_length,
+                                          self.bin_count)
+            )
 
         self.peak_based=peak_based
         self.__import_prediction_array__(round_prediction=round_predictions)

@@ -53,3 +53,7 @@ The path to the blacklist bigwig signal track of regions that should be excluded
 ### `--loglevel`
 
 This argument is used to set the logging level. Currently, the only working logging level is `ERROR`.
+
+### `--whitelist_bw`
+
+The path to a whitelist bigwig signal track of regions that should be included. When provided, benchmarking is restricted to bins that overlap the whitelist track (in addition to blacklist exclusion).
