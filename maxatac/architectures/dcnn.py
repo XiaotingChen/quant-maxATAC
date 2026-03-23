@@ -280,10 +280,10 @@ def get_dilated_cnn(
 
         model.compile(
             optimizer=Adam(
-                lr=adam_learning_rate,
+                learning_rate=adam_learning_rate,
                 beta_1=adam_beta_1,
                 beta_2=adam_beta_2,
-                decay=adam_decay
+                weight_decay=adam_decay
             ),
             loss=loss_function,
             metrics=[dice_coef]
@@ -352,10 +352,10 @@ def get_dilated_cnn(
 
         model.compile(
             optimizer=Adam(
-                lr=adam_learning_rate,
+                learning_rate=adam_learning_rate,
                 beta_1=adam_beta_1,
                 beta_2=adam_beta_2,
-                decay=adam_decay
+                weight_decay=adam_decay
             ),
             run_eagerly=True, # TODO: for debugging loss fn remove
             loss=loss_function,
