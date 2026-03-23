@@ -6,6 +6,7 @@ The `benchmark` function can be used to calculate the area under the precision r
 
 ```bash
 maxatac benchmark --prediction GM12878_CTCF_chr1.bw --gold_standard GM12878_CTCF_ENCODE_IDR.bw --chromosomes chr1 --bin_size 200
+maxatac benchmark --prediction primary.bw --alternative_prediction secondary.bw --prediction_combine_operation max --gold_standard GM12878_CTCF_ENCODE_IDR.bw --chromosomes chr1 --bin_size 200
 ```
 
 ## Required Arguments
@@ -57,3 +58,8 @@ This argument is used to set the logging level. Currently, the only working logg
 ### `--whitelist_bw`
 
 The path to a whitelist bigwig signal track of regions that should be included. When provided, benchmarking is restricted to bins that overlap the whitelist track (in addition to blacklist exclusion).
+
+
+### Optional alternate prediction bigWig
+
+You can provide `--alternative_prediction` to benchmark a second prediction bigWig together with the primary `--prediction` input. Before downstream metrics are computed, the benchmark command extracts the binned values from both files and combines them per bin. Use `--prediction_combine_operation mean` to average bins when both files provide a value, or `--prediction_combine_operation max` to keep the larger value. If only one file provides a value for a bin, that available value is used.
