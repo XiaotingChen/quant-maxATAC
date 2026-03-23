@@ -77,7 +77,7 @@ def get_parser():
     # Parent (general) parser
     parent_parser = argparse.ArgumentParser(add_help=False)
 
-    general_parser = argparse.ArgumentParser(description="Neural networks for predicting TF binding using ATAC-seq")
+    general_parser = argparse.ArgumentParser(description="Neural networks for predicting TF binding using ATAC-seq"，allow_abbrev=False)
 
     # Add subparsers to the general parser and require that one is provided
     subparsers = general_parser.add_subparsers()
@@ -733,6 +733,21 @@ def get_parser():
                                                type=str,
                                                help="Prediction bigWig file"
                                                )
+
+    benchmark_parser.add_argument("--alternative_prediction",
+                                  dest="alternative_prediction",
+                                  type=str,
+                                  default=None,
+                                  help="Optional second prediction bigWig file to combine with the primary prediction before benchmarking"
+                                  )
+
+    benchmark_parser.add_argument("--prediction_combine_operation",
+                                  dest="prediction_combine_operation",
+                                  type=str,
+                                  choices=["mean", "max"],
+                                  default="mean",
+                                  help="How to combine bins from the primary and alternative prediction bigWig files when both provide a value. Default: mean"
+                                  )
 
     benchmark_parser.add_argument("--quant_gold_standard",
                                   dest="quant_gold_standard",
