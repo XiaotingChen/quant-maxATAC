@@ -273,24 +273,83 @@ def filter_chrom_sizes(chrom_sizes_path, chromosomes, target_chrom_sizes_file):
     
     return target_chrom_sizes_file
 
-def import_prediction_array_fn(prediction_stream, chromosome, chromosome_length, agg_function, bin_count):
+def import_bigwig_stats_array(bigwig_stream, chromosome, chromosome_length, agg_function, bin_count):
     """
-    Import the chromosome signal from the predictions bigwig file and convert to a numpy array.
+    Import chromosome-level bigWig stats as a float array while preserving missing values as NaN.
+    """
+    return np.array(bigwig_stream.stats(chromosome,
+                                        0,
+                                        chromosome_length,
+                                        type=agg_function,
+                                        nBins=bin_count,
+                                        exact=True),
+                    dtype=float)
+
+
+def combine_prediction_arrays(primary_array, alternative_array=None, combine_operation="mean"):
+    """
+    Combine two prediction arrays element-wise.
+
+    Whenever both arrays contain values for the same bin, combine them using either the
+    element-wise mean or max. If only one array has a value for a bin, use the available
+    value. If neither has a value, return 0 for that position.
+    """
+    primary_array = np.array(primary_array, dtype=float)
+    if alternative_array is None:
+        return np.nan_to_num(primary_array)
+
+    alternative_array = np.array(alternative_array, dtype=float)
+
+    if primary_array.shape != alternative_array.shape:
+        raise ValueError("Prediction arrays must have the same shape to be combined.")
+
+    if combine_operation not in {"mean", "max"}:
+        raise ValueError("combine_operation must be either 'mean' or 'max'.")
+
+    primary_available = ~np.isnan(primary_array)
+    alternative_available = ~np.isnan(alternative_array)
+    both_available = primary_available & alternative_available
+
+    combined = np.full(primary_array.shape, np.nan, dtype=float)
+    combined[primary_available & ~alternative_available] = primary_array[primary_available & ~alternative_available]
+    combined[alternative_available & ~primary_available] = alternative_array[alternative_available & ~primary_available]
+
+    if combine_operation == "mean":
+        combined[both_available] = (primary_array[both_available] + alternative_array[both_available]) / 2.0
+    else:
+        combined[both_available] = np.maximum(primary_array[both_available], alternative_array[both_available])
+
+    return np.nan_to_num(combined)
+
+
+def import_prediction_array_fn(prediction_stream,
+                               chromosome,
+                               chromosome_length,
+                               agg_function,
+                               bin_count,
+                               alternative_prediction_stream=None,
+                               combine_operation="mean"):
+    """
+    Import the chromosome signal from one or two prediction bigWig files and convert to a numpy array.
     """
 
-    # Get the bin stats from the prediction array
+    prediction_array = import_bigwig_stats_array(prediction_stream,
+                                                 chromosome,
+                                                 chromosome_length,
+                                                 agg_function,
+                                                 bin_count)
 
-    prediction_array = np.nan_to_num(np.array(prediction_stream.stats(chromosome,
-                                                                           0,
-                                                                           chromosome_length,
-                                                                           type=agg_function,
-                                                                           nBins=bin_count,
-                                                                           exact=True),
-                                              dtype=float  # need it to have NaN instead of None
-                                                   )
-                                          )
+    alternative_prediction_array = None
+    if alternative_prediction_stream is not None:
+        alternative_prediction_array = import_bigwig_stats_array(alternative_prediction_stream,
+                                                                chromosome,
+                                                                chromosome_length,
+                                                                agg_function,
+                                                                bin_count)
 
-    return prediction_array
+    return combine_prediction_arrays(prediction_array,
+                                     alternative_prediction_array,
+                                     combine_operation=combine_operation)
 
 
 def import_quant_goldstandard_array_fn(quant_goldstandard_stream, chromosome, chromosome_length, agg_function, bin_count):

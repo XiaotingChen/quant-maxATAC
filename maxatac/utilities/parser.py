@@ -734,6 +734,21 @@ def get_parser():
                                                help="Prediction bigWig file"
                                                )
 
+    benchmark_parser.add_argument("--alternative_prediction",
+                                  dest="alternative_prediction",
+                                  type=str,
+                                  default=None,
+                                  help="Optional second prediction bigWig file to combine with the primary prediction before benchmarking"
+                                  )
+
+    benchmark_parser.add_argument("--prediction_combine_operation",
+                                  dest="prediction_combine_operation",
+                                  type=str,
+                                  choices=["mean", "max"],
+                                  default="mean",
+                                  help="How to combine bins from the primary and alternative prediction bigWig files when both provide a value. Default: mean"
+                                  )
+
     benchmark_parser.add_argument("--quant_gold_standard",
                                   dest="quant_gold_standard",
                                   type=str,

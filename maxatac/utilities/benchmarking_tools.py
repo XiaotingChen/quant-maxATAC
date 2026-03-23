@@ -66,7 +66,9 @@ class calculate_R2_pearson_spearman(object):
                  results_location,
                  blacklist_bw,
                  whitelist_bw,
-                 quant_gs_null
+                 quant_gs_null,
+                 alternative_prediction_bw=None,
+                 prediction_combine_operation="mean"
                  ):
 
         """
@@ -75,6 +77,7 @@ class calculate_R2_pearson_spearman(object):
         self.results_location = results_location
 
         self.prediction_stream = load_bigwig(prediction_bw)
+        self.alternative_prediction_stream = load_bigwig(alternative_prediction_bw) if alternative_prediction_bw else None
         self.goldstandard_stream = load_bigwig(goldstandard_bw)
         self.quant_goldstandard_stream = load_bigwig(quant_goldstandard_bw)
         self.quant_gs_null_stream = load_bigwig(quant_gs_null)
@@ -86,6 +89,7 @@ class calculate_R2_pearson_spearman(object):
         self.bin_size = bin_size
         self.agg_function = agg_function
         self.quant_gs_null = quant_gs_null # change to quant_null_model
+        self.prediction_combine_operation = prediction_combine_operation
 
         # This has been modified
         self.blacklist_mask = chromosome_blacklist_mask(blacklist_bw,
@@ -124,15 +128,13 @@ class calculate_R2_pearson_spearman(object):
 
         # Get the bin stats from the prediction array
 
-        self.prediction_array = np.nan_to_num(np.array(self.prediction_stream.stats(self.chromosome,
-                                                                                    0,
-                                                                                    self.chromosome_length,
-                                                                                    type=self.agg_function,
-                                                                                    nBins=self.bin_count,
-                                                                                    exact=True),
-                                                       dtype=float  # need it to have NaN instead of None
-                                                       )
-                                              )
+        self.prediction_array = import_prediction_array_fn(self.prediction_stream,
+                                                         self.chromosome,
+                                                         self.chromosome_length,
+                                                         self.agg_function,
+                                                         self.bin_count,
+                                                         alternative_prediction_stream=self.alternative_prediction_stream,
+                                                         combine_operation=self.prediction_combine_operation)
 
 
 
@@ -450,7 +452,9 @@ class ChromosomeAUPRC(object):
                  results_location,
                  round_predictions,
                  plot=False,
-                 peak_based=False
+                 peak_based=False,
+                 alternative_prediction_bw=None,
+                 prediction_combine_operation="mean"
                  ):
         """
         :param prediction_bw: Path to bigwig file containing maxATAC predictions
@@ -463,6 +467,7 @@ class ChromosomeAUPRC(object):
         self.results_location = results_location
 
         self.prediction_stream = load_bigwig(prediction_bw)
+        self.alternative_prediction_stream = load_bigwig(alternative_prediction_bw) if alternative_prediction_bw else None
         self.goldstandard_stream = load_bigwig(goldstandard_bw)
 
         self.chromosome = chromosome
@@ -472,6 +477,7 @@ class ChromosomeAUPRC(object):
         self.bin_size = bin_size
 
         self.agg_function = agg_function
+        self.prediction_combine_operation = prediction_combine_operation
 
         self.blacklist_mask = chromosome_blacklist_mask(blacklist_bw,
                                                         self.chromosome,
@@ -507,15 +513,13 @@ class ChromosomeAUPRC(object):
         logging.info("Import Predictions Array")
 
         # Get the bin stats from the prediction array
-        self.prediction_array = np.nan_to_num(np.array(self.prediction_stream.stats(self.chromosome,
-                                                                                    0,
-                                                                                    self.chromosome_length,
-                                                                                    type=self.agg_function,
-                                                                                    nBins=self.bin_count,
-                                                                                    exact=True),
-                                                       dtype=float  # need it to have NaN instead of None
-                                                       )
-                                              )
+        self.prediction_array = import_prediction_array_fn(self.prediction_stream,
+                                                         self.chromosome,
+                                                         self.chromosome_length,
+                                                         self.agg_function,
+                                                         self.bin_count,
+                                                         alternative_prediction_stream=self.alternative_prediction_stream,
+                                                         combine_operation=self.prediction_combine_operation)
 
         self.prediction_array = np.round(self.prediction_array, round_prediction)
 
