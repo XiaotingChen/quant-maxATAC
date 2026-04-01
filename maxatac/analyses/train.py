@@ -81,7 +81,8 @@ def run_training(args):
                                  target_scale_factor=args.target_scale_factor,
                                  dense=args.dense,
                                  weights=args.weights,
-                                 loss=args.loss
+                                 loss=args.loss,
+                                 deterministic=args.DETERMINISTIC,
                                  )
 
     logging.info("Import training regions")

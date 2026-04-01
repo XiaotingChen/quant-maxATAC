@@ -81,6 +81,9 @@ class MaxATACModel(object):
         self.deterministic = deterministic
 
         # Set the random seed for the model
+        random.seed(self.seed)
+        np.random.seed(self.seed)
+        tf.random.set_seed(self.seed)
         tf.keras.utils.set_random_seed(self.seed)
         if self.deterministic:
             tf.config.experimental.enable_op_determinism()
