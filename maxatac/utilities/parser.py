@@ -77,7 +77,7 @@ def get_parser():
     # Parent (general) parser
     parent_parser = argparse.ArgumentParser(add_help=False)
 
-    general_parser = argparse.ArgumentParser(description="Neural networks for predicting TF binding using ATAC-seq"，allow_abbrev=False)
+    general_parser = argparse.ArgumentParser(description="Neural networks for predicting TF binding using ATAC-seq",allow_abbrev=False)
 
     # Add subparsers to the general parser and require that one is provided
     subparsers = general_parser.add_subparsers()
@@ -480,7 +480,7 @@ def get_parser():
     train_parser.add_argument("--seed",
                               dest="seed",
                               type=int,
-                              default=random.randint(1, 99999),
+                              default=42,
                               help="Seed for pseudo-random generanor. Default: random int [1, 99999]"
                               )
 
@@ -606,6 +606,14 @@ def get_parser():
                               type=str,
                               help="Chromosome sizes file"
                               )
+
+    train_parser.add_argument(
+        "--DETERMINISTIC",
+        dest="DETERMINISTIC",
+        action="store_true",
+        default=False,
+        help="Set training process to behave deterministically.",
+    )
 
     #############################################
     # Normalize parser
@@ -1248,7 +1256,7 @@ def parse_arguments(argsl, cwd_abs_path=None):
                 "train_tf", "arch", "quant","batch_size", "save_roi",
                 "val_batch_size", "target_scale_factor", "blacklist", "chrom_sizes",
                 "output_activation", "dense", "shuffle_cell_type", "rev_comp", "genome", "loss", "pred_gs_meta",
-                "peak_based"
+                "peak_based","DETERMINISTIC"
             ],
             cwd_abs_path
         )

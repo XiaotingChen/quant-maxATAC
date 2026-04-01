@@ -43,7 +43,8 @@ class MaxATACModel(object):
                  quant=False,
                  interpret=False,
                  interpret_cell_type="",
-                 loss="cross_entropy"
+                 loss="cross_entropy",
+                 deterministic=False
                  ):
         """
         Initialize the maxATAC model with the input parameters and architecture
@@ -77,9 +78,12 @@ class MaxATACModel(object):
         self.quant = quant
         self.target_scale_factor = target_scale_factor
         self.loss = loss
+        self.deterministic = deterministic
 
         # Set the random seed for the model
-        random.seed(seed)
+        tf.keras.utils.set_random_seed(self.seed)
+        if self.deterministic:
+            tf.config.experimental.enable_op_determinism()
 
         # Import meta txt as dataframe
         self.meta_dataframe = pd.read_csv(self.meta_path, sep='\t', header=0, index_col=None)
