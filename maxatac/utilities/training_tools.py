@@ -43,7 +43,8 @@ class MaxATACModel(object):
                  quant=False,
                  interpret=False,
                  interpret_cell_type="",
-                 loss="cross_entropy"
+                 loss="cross_entropy",
+                 deterministic=False
                  ):
         """
         Initialize the maxATAC model with the input parameters and architecture
@@ -77,9 +78,16 @@ class MaxATACModel(object):
         self.quant = quant
         self.target_scale_factor = target_scale_factor
         self.loss = loss
+        self.deterministic = deterministic
 
         # Set the random seed for the model
-        random.seed(seed)
+        random.seed(self.seed)
+        np.random.seed(self.seed)
+        tf.random.set_seed(self.seed)
+        tf.keras.utils.set_random_seed(self.seed)
+        if self.deterministic:
+            os.environ["TF_DETERMINISTIC_OPS"] = "1"
+            tf.config.experimental.enable_op_determinism()
 
         # Import meta txt as dataframe
         self.meta_dataframe = pd.read_csv(self.meta_path, sep='\t', header=0, index_col=None)
@@ -129,7 +137,8 @@ def DataGenerator(
         batch_size=BATCH_SIZE,
         shuffle_cell_type=False,
         rev_comp_train=False,
-        chrom_sizes=False
+        chrom_sizes=False,
+        seed=None
 
 ):
     """
@@ -167,13 +176,16 @@ def DataGenerator(
     # Calculate number of random regions to use each batch
     n_rand = round(batch_size - n_roi)
 
+    py_rng = random.Random(seed)
+
     if n_rand > 0:
         # Generate the training random regions pool
         # TODO: Check this instance of args in line 161, needed or not? training worked with it.
         train_random_regions_pool = RandomRegionsPool(chroms=build_chrom_sizes_dict(chroms, chrom_sizes),
                                                     chrom_pool_size=CHR_POOL_SIZE,
                                                     region_length=INPUT_LENGTH,
-                                                    preferences=False  # can be None
+                                                    preferences=False,  # can be None
+                                                    rng=py_rng
                                                     )
 
         # Initialize the random regions generator
@@ -185,7 +197,8 @@ def DataGenerator(
                                        bp_resolution=bp_resolution,
                                        quant_train=quant,
                                        target_scale_factor=target_scale_factor,
-                                       rev_comp_train=rev_comp_train
+                                       rev_comp_train=rev_comp_train,
+                                       rng=py_rng
                                        )
 
     # Initialize the ROI generator
@@ -198,7 +211,8 @@ def DataGenerator(
                                quant_train=quant,
                                target_scale_factor=target_scale_factor,
                                shuffle_cell_type=shuffle_cell_type,
-                               rev_comp_train=rev_comp_train
+                               rev_comp_train=rev_comp_train,
+                               rng=py_rng
                                )
 
     while True:
@@ -330,7 +344,8 @@ def create_roi_batch(sequence,
                      quant_train=False,
                      target_scale_factor=1,
                      shuffle_cell_type=False,
-                     rev_comp_train=False
+                     rev_comp_train=False,
+                     rng=None
                      ):
     """
     Create a batch of examples from regions of interest. The batch size is defined by n_roi. This code will randomly
@@ -348,6 +363,9 @@ def create_roi_batch(sequence,
 
     :return: np.array(inputs_batch), np.array(targets_batch)
     """
+    if rng is None:
+        rng = random
+
     while True:
         # Create empty lists that will hold the signal tracks
         inputs_batch, targets_batch = [], []
@@ -356,7 +374,7 @@ def create_roi_batch(sequence,
         roi_size = roi_pool.shape[0]
 
         # Randomly select n regions from the pool
-        curr_batch_idxs = random.sample(range(roi_size), n_roi)
+        curr_batch_idxs = rng.sample(range(roi_size), n_roi)
 
         # Extract the signal for every sample
         for row_idx in curr_batch_idxs:
@@ -364,7 +382,7 @@ def create_roi_batch(sequence,
 
             # If shuffle_cell_type the cell type will be randomly chosen
             if shuffle_cell_type:
-                cell_line = random.choice(cell_type_list)
+                cell_line = rng.choice(cell_type_list)
 
             else:
                 cell_line = roi_row['Cell_Line']
@@ -383,7 +401,7 @@ def create_roi_batch(sequence,
 
             # Choose whether to use the reverse complement of the region
             if rev_comp_train:
-                rev_comp = random.choice([True, False])
+                rev_comp = rng.choice([True, False])
 
             else:
                 rev_comp = False
@@ -457,17 +475,21 @@ def create_random_batch(
         bp_resolution=1,
         quant_train=False,
         target_scale_factor=1,
-        rev_comp_train=False
+        rev_comp_train=False,
+        rng=None
 ):
     """
     This function will create a batch of examples that are randomly generated. This batch of data is created the same
     as the roi batches.
     """
+    if rng is None:
+        rng = random
+
     while True:
         inputs_batch, targets_batch = [], []
 
         for idx in range(n_rand):
-            cell_line = random.choice(cell_type_list)  # Randomly select a cell line
+            cell_line = rng.choice(cell_type_list)  # Randomly select a cell line
 
             chrom_name, seq_start, seq_end = regions_pool.get_region()  # returns random region (chrom_name, start, end)
 
@@ -483,7 +505,7 @@ def create_random_batch(
                     load_bigwig(binding) as binding_stream:
 
                 if rev_comp_train:
-                    rev_comp = random.choice([True, False])
+                    rev_comp = rng.choice([True, False])
 
                 else:
                     rev_comp = False
@@ -551,13 +573,15 @@ class RandomRegionsPool:
             chroms,  # in a form of {"chr1": {"length": 249250621, "region": [0, 249250621]}}, "region" is ignored
             chrom_pool_size,
             region_length,
-            preferences=None  # bigBed file with ranges to limit random regions selection
+            preferences=None,  # bigBed file with ranges to limit random regions selection
+            rng=None
     ):
 
         self.chroms = chroms
         self.chrom_pool_size = chrom_pool_size
         self.region_length = region_length
         self.preferences = preferences
+        self.rng = rng if rng is not None else random
 
         # self.preference_pool = self.__get_preference_pool()  # should be run before self.__get_chrom_pool()
         self.preference_pool = False
@@ -571,7 +595,7 @@ class RandomRegionsPool:
     def get_region(self):
 
         if self.__idx == self.chrom_pool_size:
-            random.shuffle(self.chrom_pool)
+            self.rng.shuffle(self.chrom_pool)
 
             self.__idx = 0
 
@@ -580,12 +604,12 @@ class RandomRegionsPool:
         self.__idx += 1
 
         if self.preference_pool:
-            preference = random.sample(self.preference_pool[chrom_name], 1)[0]
+            preference = self.rng.sample(self.preference_pool[chrom_name], 1)[0]
 
-            start = round(random.randint(preference[0], preference[1] - self.region_length))
+            start = round(self.rng.randint(preference[0], preference[1] - self.region_length))
 
         else:
-            start = round(random.randint(0, chrom_length - self.region_length))
+            start = round(self.rng.randint(0, chrom_length - self.region_length))
 
         end = start + self.region_length
 
@@ -624,7 +648,7 @@ class RandomRegionsPool:
         for k, v in frequencies.items():
             labels += [(k, self.chroms[k])] * v
 
-        random.shuffle(labels)
+        self.rng.shuffle(labels)
 
         return labels
 
