@@ -122,7 +122,8 @@ def run_training(args):
                               batch_size=args.batch_size,
                               shuffle_cell_type=args.shuffle_cell_type,
                               rev_comp_train=args.rev_comp,
-                              chrom_sizes=args.chrom_sizes
+                              chrom_sizes=args.chrom_sizes,
+                              seed=args.seed
                               )
 
     # Create keras.utils.sequence object from training generator
@@ -163,7 +164,8 @@ def run_training(args):
                             batch_size=args.batch_size,
                             shuffle_cell_type=args.shuffle_cell_type,
                             rev_comp_train=args.rev_comp,
-                            chrom_sizes=args.chrom_sizes
+                            chrom_sizes=args.chrom_sizes,
+                            seed=args.seed + 1
                             )
 
     # Create keras.utils.sequence object from validation generator
