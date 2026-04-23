@@ -22,6 +22,7 @@ with Mute():
     from maxatac.analyses.prepare import run_prepare
     from maxatac.analyses.threshold import run_thresholding
     from maxatac.analyses.data import run_data
+    from maxatac.analyses.model_interpreting import run_model_interpreting
 
 from maxatac.utilities.constants import (DEFAULT_TRAIN_VALIDATE_CHRS,
                                          LOG_LEVELS,
@@ -1197,6 +1198,131 @@ def get_parser():
                                   required=True,
                                   help="Meta file containing Prediction signal and GS path for all cell lines (.tsv format)"
                                   )
+
+    #############################################
+    # Model interpreting subparser
+    #############################################
+    model_interpreting_parser = subparsers.add_parser(
+        "model_interpreting",
+        parents=[parent_parser],
+        help="Classify genome bins as TP/FP/TN/FN and extract 1024 bp signal matrices per class."
+    )
+
+    model_interpreting_parser.set_defaults(func=run_model_interpreting)
+
+    model_interpreting_parser.add_argument(
+        "--prediction",
+        dest="prediction",
+        type=str,
+        required=True,
+        help="Prediction bigWig file"
+    )
+
+    model_interpreting_parser.add_argument(
+        "--gold_standard",
+        dest="gold_standard",
+        type=str,
+        required=True,
+        help="Binary gold standard bigWig file"
+    )
+
+    model_interpreting_parser.add_argument(
+        "--benchmark_tsv",
+        dest="benchmark_tsv",
+        type=str,
+        required=True,
+        help="Benchmark TSV file produced by the benchmark step (used for threshold selection)"
+    )
+
+    model_interpreting_parser.add_argument(
+        "--motif",
+        dest="motif",
+        type=str,
+        required=True,
+        help="Motif scanning bigWig file"
+    )
+
+    model_interpreting_parser.add_argument(
+        "--atac",
+        dest="atac",
+        type=str,
+        required=True,
+        help="Input ATAC-seq signal bigWig file"
+    )
+
+    model_interpreting_parser.add_argument(
+        "-c", "--chroms", "--chromosomes",
+        dest="chromosomes",
+        type=str,
+        nargs="+",
+        default=DEFAULT_TEST_CHRS,
+        help="Chromosomes to analyse. Default: " + str(DEFAULT_TEST_CHRS)
+    )
+
+    model_interpreting_parser.add_argument(
+        "--bin_size",
+        dest="bin_size",
+        type=int,
+        default=DEFAULT_BENCHMARKING_BIN_SIZE,
+        help="Bin size for genome chunking. Default: " + str(DEFAULT_BENCHMARKING_BIN_SIZE)
+    )
+
+    model_interpreting_parser.add_argument(
+        "--agg",
+        dest="agg_function",
+        type=str,
+        default=DEFAULT_BENCHMARKING_AGGREGATION_FUNCTION,
+        help="Aggregation function for binning (max, mean, min). Default: " + DEFAULT_BENCHMARKING_AGGREGATION_FUNCTION
+    )
+
+    model_interpreting_parser.add_argument(
+        "--precision_level",
+        dest="precision_level",
+        type=float,
+        default=0.7,
+        help="Precision level at which to select the classification threshold from the benchmark TSV. Default: 0.7"
+    )
+
+    model_interpreting_parser.add_argument(
+        "--threshold",
+        dest="threshold",
+        type=float,
+        default=None,
+        help="Classification threshold value. Overrides --precision_level selection when provided."
+    )
+
+    model_interpreting_parser.add_argument(
+        "--tn_limit",
+        dest="tn_limit",
+        type=int,
+        default=None,
+        help="Maximum number of TN windows to save. Default: None (save all)."
+    )
+
+    model_interpreting_parser.add_argument(
+        "-n", "--name", "--prefix",
+        dest="prefix",
+        type=str,
+        required=True,
+        help="Prefix for output filenames"
+    )
+
+    model_interpreting_parser.add_argument(
+        "-o", "--output_directory",
+        dest="output_directory",
+        type=str,
+        default="./model_interpreting_results",
+        help="Output directory. Default: ./model_interpreting_results"
+    )
+
+    model_interpreting_parser.add_argument(
+        "--loglevel",
+        dest="loglevel",
+        type=str,
+        default=DEFAULT_LOG_LEVEL,
+        choices=LOG_LEVELS.keys(),
+        help="Logging level. Default: " + DEFAULT_LOG_LEVEL
+    )
 
     return general_parser
 
