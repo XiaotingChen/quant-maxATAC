@@ -217,7 +217,9 @@ def update_reference_genome_paths(args):
 
     chrom_sizes_path = os.path.join(maxatac_data_path, f"{args.genome}/{args.genome}.chrom.sizes")  # chrom sizes file
 
-    sequence_path = os.path.join(maxatac_data_path, f"{args.genome}/{args.genome}.2bit")  # sequence 2bit
+    sequence_path = getattr(args, "sequence", None)
+    if sequence_path is None:
+        sequence_path = os.path.join(maxatac_data_path, f"{args.genome}/{args.genome}.2bit")  # sequence 2bit
 
     # normalize paths
     args.blacklist = blacklist_path

@@ -263,8 +263,8 @@ def get_input_matrix(signal_stream,
         # Get the one hot encoded sequence
         input_matrix[n, :] = get_one_hot_encoded(target_sequence, bp)
 
-    signal_array = np.array(signal_stream.values(chromosome, start, end))
-
+    #signal_array = np.array(signal_stream.values(chromosome, start, end))
+    signal_array=np.array(np.zeros(1024))
     input_matrix[4, :] = signal_array
 
     # If reverse_matrix then reverse the matrix. This changes the left to right orientation.
