@@ -14,8 +14,14 @@ def _select_threshold(benchmark_tsv, precision_level=0.7, threshold_override=Non
     if threshold_override is not None:
         return float(threshold_override)
     df = pd.read_csv(benchmark_tsv, sep="\t")
-    idx = (df["Precision"] - precision_level).abs().idxmin()
-    return float(df.loc[idx, "Threshold"])
+    valid = df[df["Precision"] >= precision_level]
+    if valid.empty:
+        logging.warning(
+            "No threshold achieves precision >= %.2f; using threshold with highest precision"
+            % precision_level
+        )
+        return float(df.loc[df["Precision"].idxmax(), "Threshold"])
+    return float(valid.loc[valid["Recall"].idxmax(), "Threshold"])
 
 
 def _classify_indices(pred_array, gs_array, threshold):

@@ -36,8 +36,6 @@ def plot_avg_signal_profile(data, category, output_dir):
         ax.plot(x, mean_trace, color=SIGNAL_COLORS[signal], linewidth=0.8)
         ax.set_ylabel(signal)
         ax.set_xlim(0, len(mean_trace) - 1)
-        if (signal != "motif") and (signal != "prediction"):
-            ax.set_ylim(0, 1.0)
 
     axes[-1].set_xlabel("Position in 1024 bp window (bp)")
     fig.tight_layout()

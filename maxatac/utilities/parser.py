@@ -78,7 +78,7 @@ def get_parser():
     # Parent (general) parser
     parent_parser = argparse.ArgumentParser(add_help=False)
 
-    general_parser = argparse.ArgumentParser(description="Neural networks for predicting TF binding using ATAC-seq"，allow_abbrev=False)
+    general_parser = argparse.ArgumentParser(description="Neural networks for predicting TF binding using ATAC-seq",allow_abbrev=False)
 
     # Add subparsers to the general parser and require that one is provided
     subparsers = general_parser.add_subparsers()
