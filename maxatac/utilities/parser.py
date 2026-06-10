@@ -36,6 +36,7 @@ from maxatac.utilities.constants import (DEFAULT_TRAIN_VALIDATE_CHRS,
                                          DEFAULT_ROUND,
                                          DEFAULT_TEST_CHRS,
                                          DEFAULT_BENCHMARKING_AGGREGATION_FUNCTION,
+                                         DEFAULT_BENCHMARKING_AGGREGATION_THRESHOLD,
                                          DEFAULT_BENCHMARKING_BIN_SIZE,
                                          ALL_CHRS,
                                          AUTOSOMAL_CHRS
@@ -790,7 +791,15 @@ def get_parser():
                                   type=str,
                                   default=DEFAULT_BENCHMARKING_AGGREGATION_FUNCTION,
                                   help="Aggregation function to use for combining results into bins: \
-                                        max, mean, min"
+                                        max, mean, min, sum"
+                                  )
+
+    benchmark_parser.add_argument("--agg_threshold",
+                                  dest="agg_threshold",
+                                  type=float,
+                                  default=DEFAULT_BENCHMARKING_AGGREGATION_THRESHOLD,
+                                  help="Threshold used when --agg sum is selected. The summed value is divided by the \
+                                        bin size and binarized to 1.0 when it is greater than or equal to this value."
                                   )
 
     benchmark_parser.add_argument("--round_predictions",

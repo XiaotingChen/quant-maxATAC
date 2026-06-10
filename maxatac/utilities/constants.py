@@ -109,6 +109,7 @@ OUTPUT_ACTIVATION = "softplus" #"sigmoid"
 
 # Benchmarking Constants
 DEFAULT_BENCHMARKING_AGGREGATION_FUNCTION = "max"
+DEFAULT_BENCHMARKING_AGGREGATION_THRESHOLD = 0.7
 DEFAULT_BENCHMARKING_BIN_SIZE = 200
 
 # Factor for scaling Targets for quant models.
