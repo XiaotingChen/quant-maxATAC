@@ -36,6 +36,7 @@ from maxatac.utilities.constants import (DEFAULT_TRAIN_VALIDATE_CHRS,
                                          DEFAULT_ROUND,
                                          DEFAULT_TEST_CHRS,
                                          DEFAULT_BENCHMARKING_AGGREGATION_FUNCTION,
+                                         DEFAULT_BENCHMARKING_AGGREGATION_THRESHOLD,
                                          DEFAULT_BENCHMARKING_BIN_SIZE,
                                          ALL_CHRS,
                                          AUTOSOMAL_CHRS
@@ -753,6 +754,13 @@ def get_parser():
                                   help="Gold Standard file"
                                   )
 
+    benchmark_parser.add_argument("--peak_based",
+                                  dest="peak_based",
+                                  action='store_true',
+                                  default=False,
+                                  help="Whether use peak-based Gold Standard instead of bin-based"
+                                  )
+
     benchmark_parser.add_argument("--quant",
                                   dest="quant",
                                   action='store_true',
@@ -783,7 +791,15 @@ def get_parser():
                                   type=str,
                                   default=DEFAULT_BENCHMARKING_AGGREGATION_FUNCTION,
                                   help="Aggregation function to use for combining results into bins: \
-                                        max, mean, min"
+                                        max, mean, min, sum"
+                                  )
+
+    benchmark_parser.add_argument("--agg_threshold",
+                                  dest="agg_threshold",
+                                  type=float,
+                                  default=DEFAULT_BENCHMARKING_AGGREGATION_THRESHOLD,
+                                  help="Threshold used when --agg sum is selected. The summed value is divided by the \
+                                        bin size and binarized to 1.0 when it is greater than or equal to this value."
                                   )
 
     benchmark_parser.add_argument("--round_predictions",
@@ -1218,7 +1234,8 @@ def parse_arguments(argsl, cwd_abs_path=None):
                 "minimum", "test_cell_lines", "rand_ratio",
                 "train_tf", "arch", "quant","batch_size", "save_roi",
                 "val_batch_size", "target_scale_factor", "blacklist", "chrom_sizes",
-                "output_activation", "dense", "shuffle_cell_type", "rev_comp", "genome", "loss", "pred_gs_meta"
+                "output_activation", "dense", "shuffle_cell_type", "rev_comp", "genome", "loss", "pred_gs_meta",
+                "peak_based"
             ],
             cwd_abs_path
         )

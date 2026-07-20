@@ -28,7 +28,6 @@ def get_version():
     Updates/creates git_version file with the package version
     Returns package version
     """
-
     version = "1.0.6.4"                                       # default version
     try:
         with open(GIT_VERSION_FILE, "r") as input_stream:   # try to get version info from file

@@ -77,9 +77,12 @@ def run_benchmarking(args):
                             chromosome,
                             args.bin_size,
                             args.agg_function,
+                            args.agg_threshold,
                             results_filename,
                             args.round_predictions,
-                            plot=args.plot)
+                            plot=args.plot,
+                            peak_based=args.peak_based
+                            )
 
     # Measure End Time of Training
     stopTime = timeit.default_timer()
