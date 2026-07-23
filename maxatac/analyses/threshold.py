@@ -6,7 +6,8 @@ from multiprocessing import Pool, Manager
 import time
 from maxatac.utilities.genome_tools import build_chrom_sizes_dict, get_bigwig_stats
 from maxatac.utilities.system_tools import get_dir
-from maxatac.utilities.threshold_tools import import_blacklist_mask, import_GoldStandard_array, calculate_AUC_per_rank
+from maxatac.utilities.threshold_tools import import_blacklist_mask, import_GoldStandard_array, calculate_AUC_per_rank, hybrid_subset, compute_calibration_curve, sample_curve_at_thresholds
+from maxatac.utilities.plot import plot_threshold_calibration_stats
 from sklearn.metrics import precision_recall_curve
 from sklearn import metrics
 import pybedtools
@@ -56,9 +57,9 @@ def run_thresholding(args):
         bin_count = int(int(chrom_length) / int(args.bin_size))  # need to floor the number
         
         blacklist_mask = import_blacklist_mask(args.blacklist_bw, chrom_name, chrom_length, bin_count)
-        
-        blacklist = np.repeat(blacklist_mask, len(training_data_dict.keys()))
-        
+
+        blacklist = blacklist_mask
+
         lst_of_bws=list(training_data_dict.keys())
         
         pool = Pool(int(multiprocessing.cpu_count())) 
@@ -68,7 +69,9 @@ def run_thresholding(args):
                             )
         OUT.append(output)
 
-    
+
+    # Stack each cell type's Prediction/GoldStandard as a pair of columns, then take the
+    # per-bin median across cell types (median-across-cell-type logic).
     DF=pd.DataFrame([])
     total_gs_bins = []
     for i in range(len(OUT[0])):
@@ -78,12 +81,15 @@ def run_thresholding(args):
         df['GoldStandard'] = OUT[0][i][1][:bin_count].tolist()
 
         gs_bins = OUT[0][i][2]
-        DF = DF.append(df)
+        DF = pd.concat([DF, df], axis=1, ignore_index=True)
         total_gs_bins.append(gs_bins)
-    
-    
-    DF.loc[DF['GoldStandard'] != 1, 'GoldStandard'] = 0
-    precision, recall, thresholds = precision_recall_curve(DF['GoldStandard'][blacklist], DF['Prediction'][blacklist])
+
+    DF_median = pd.DataFrame([])
+    DF_median['Prediction'] = np.nanmedian(DF[range(0, np.shape(DF)[1], 2)], axis=1)
+    DF_median['GoldStandard'] = np.nanmedian(DF[range(1, np.shape(DF)[1], 2)], axis=1)
+
+    DF_median.loc[DF_median['GoldStandard'] != 1, 'GoldStandard'] = 0
+    precision, recall, thresholds = precision_recall_curve(DF_median['GoldStandard'][blacklist], DF_median['Prediction'][blacklist])
     
     
     # Create a dataframe from the results
@@ -95,10 +101,11 @@ def run_thresholding(args):
     
     PR_CURVE_DF = pd.DataFrame({'Precision': P, 'Recall': R, "Threshold": np.insert(thresholds, 0, 0)})
     
-    #Extend last row of entries to threshold of 1
+    # Duplicate the last row so hybrid_subset has a trailing row to drop and re-anchor
+    # on. Not forced to Threshold=1 here: these are quant models, so the max predicted
+    # value (and therefore the max threshold) routinely exceeds 1.0.
     new_row = PR_CURVE_DF.tail(n=1)
-    new_row.Threshold = 1
-    PR_CURVE_DF = PR_CURVE_DF.append(new_row)
+    PR_CURVE_DF = pd.concat([PR_CURVE_DF, new_row], ignore_index=True)
     
     # total_gs_bins: Total GS bins across for each CT
     PR_CURVE_DF["Total_Avg_GoldStandard_Bins"] = int(np.mean(total_gs_bins))
@@ -142,10 +149,40 @@ def run_thresholding(args):
 
     PR_CURVE_DF.columns = 	['Monotonic_Precision', 'Monotonic_Recall', 'Threshold', 'Monotonic_log2FC', 'Monotonic_F1']
     PR_CURVE_DF.to_csv(results_filename, sep="\t", header=True, index=False)
-    
-    
-    
-    
+
+    logging.info("Generating hybrid-subset (downsampled) threshold calibration table")
+
+    # Drop the duplicate tail-extension row, then anchor on the row that follows it so
+    # the true endpoint is guaranteed to survive the max-F1 binning in hybrid_subset.
+    df_full = PR_CURVE_DF.drop(PR_CURVE_DF.index[-1])
+    last_row_df_source = df_full.iloc[-1:]
+
+    hybrid_df = hybrid_subset(df_full, last_row_df_source, n_bins=300)
+
+    hybrid_filename = os.path.join(output_dir, args.prefix + "_hybrid.tsv")
+    hybrid_df.to_csv(hybrid_filename, sep="\t", header=True, index=False)
+
+    logging.info("Building per-cell-type curves and plotting the validation statistics v. threshold values")
+
+    # Plot on the hybrid-subset's threshold grid: build each cell type's own monotonic
+    # curve, then resample it onto hybrid_df's unique Threshold values (step lookup,
+    # extrapolating past a curve's own range) so every line shares the same x-axis.
+    shared_thresholds = hybrid_df['Threshold'].to_numpy()
+    cell_type_curves = []
+    for i in range(len(OUT[0])):
+        ct_curve = compute_calibration_curve(
+            DF[2 * i + 1][blacklist], DF[2 * i][blacklist], total_gs_bins[i], rand_bins
+        )
+        ct_curve_sampled = sample_curve_at_thresholds(ct_curve, shared_thresholds)
+        cell_type_curves.append({'name': os.path.basename(lst_of_bws[i]), 'curve': ct_curve_sampled})
+
+    median_curve_for_plot = hybrid_df.rename(columns={
+        'Monotonic_Precision': 'Precision',
+        'Monotonic_Recall': 'Recall',
+        'Monotonic_log2FC': 'log2FC',
+        'Monotonic_F1': 'F1',
+    })
+    plot_threshold_calibration_stats(median_curve_for_plot, cell_type_curves, results_filename, args.prefix)
 
 
 

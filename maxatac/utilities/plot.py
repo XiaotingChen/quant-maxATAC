@@ -258,6 +258,50 @@ def export_prc(precision, recall, file_location, title="Precision Recall Curve",
     plt.close("all")
 
 
+def plot_threshold_calibration_stats(median_curve, cell_type_curves, file_location, prefix,
+                                     suffix="_validationPerformance_vs_thresholdCalibration", ext=".png", style="ggplot"):
+    """
+    Multi-panel threshold calibration plot: Precision, log2(FC), Recall, and F1 vs.
+    Threshold. The median-across-cell-type curve is drawn in black; each individual
+    cell type's own curve is drawn in a distinct rainbow color for comparison.
+
+    median_curve: DataFrame with columns Precision, Recall, Threshold, log2FC, F1.
+    cell_type_curves: list of {'name': str, 'curve': DataFrame with the same columns}.
+    """
+    plt.style.use(style)
+    fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(15, 12))
+
+    panels = [
+        (axs[0, 0], "Precision", "Precision"),
+        (axs[0, 1], "log2FC", "log2(FC)"),
+        (axs[1, 0], "Recall", "Recall"),
+        (axs[1, 1], "F1", "F1 Score"),
+    ]
+
+    n_curves = max(len(cell_type_curves), 1)
+    colors = plt.cm.rainbow(np.linspace(0, 1, n_curves))
+
+    max_threshold = median_curve["Threshold"].max()
+    if cell_type_curves:
+        max_threshold = max(max_threshold, max(ct["curve"]["Threshold"].max() for ct in cell_type_curves))
+
+    for ax, col, label in panels:
+        for color, ct in zip(colors, cell_type_curves):
+            ax.plot(ct["curve"]["Threshold"], ct["curve"][col], c=color, lw=1.2, alpha=0.85, label=ct["name"])
+        ax.plot(median_curve["Threshold"], median_curve[col], c="black", lw=3, label="Median")
+        ax.set_title(f"chr2 Validation {label} v. Thresholds", size="medium")
+        ax.set_xlabel("Threshold", size="medium")
+        ax.set_xlim([0.0, max_threshold])
+        ax.set_ylabel(f"Validation {label}", size="medium")
+
+    # Single shared legend below the grid instead of repeating it on every subplot.
+    handles, labels = axs[0, 0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=min(len(labels), 6), fontsize=9, bbox_to_anchor=(0.5, -0.02))
+
+    fig.suptitle(prefix + " chr2 Validation Performance v. Threshold Calibration")
+    fig.savefig(replace_extension(file_location, prefix + '_' + suffix + ext), bbox_inches="tight", dpi=320)
+
+
 def plot_chromosome_scores_dist(input_bigwig, chrom_name, region_start, region_stop):
     with pyBigWig.open(input_bigwig) as input_bw:
         chr_vals = input_bw.values(chrom_name, region_start, region_stop, numpy=True)
