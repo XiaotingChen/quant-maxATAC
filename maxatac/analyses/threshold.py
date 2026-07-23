@@ -58,8 +58,6 @@ def run_thresholding(args):
         
         blacklist_mask = import_blacklist_mask(args.blacklist_bw, chrom_name, chrom_length, bin_count)
 
-        blacklist = blacklist_mask
-
         lst_of_bws=list(training_data_dict.keys())
         
         pool = Pool(int(multiprocessing.cpu_count())) 
@@ -70,8 +68,9 @@ def run_thresholding(args):
         OUT.append(output)
 
 
-    # Stack each cell type's Prediction/GoldStandard as a pair of columns, then take the
-    # per-bin median across cell types (median-across-cell-type logic).
+    # Stack each cell type's Prediction/GoldStandard as a pair of columns. This layout
+    # is used both to build per-cell-type curves for plotting, and (in "median" mode)
+    # to aggregate across cell types before computing the curve.
     DF=pd.DataFrame([])
     total_gs_bins = []
     for i in range(len(OUT[0])):
@@ -84,12 +83,36 @@ def run_thresholding(args):
         DF = pd.concat([DF, df], axis=1, ignore_index=True)
         total_gs_bins.append(gs_bins)
 
-    DF_median = pd.DataFrame([])
-    DF_median['Prediction'] = np.nanmedian(DF[range(0, np.shape(DF)[1], 2)], axis=1)
-    DF_median['GoldStandard'] = np.nanmedian(DF[range(1, np.shape(DF)[1], 2)], axis=1)
+    num_cell_types = len(OUT[0])
 
-    DF_median.loc[DF_median['GoldStandard'] != 1, 'GoldStandard'] = 0
-    precision, recall, thresholds = precision_recall_curve(DF_median['GoldStandard'][blacklist], DF_median['Prediction'][blacklist])
+    if args.aggregation == "median":
+        # Per-bin median Prediction/GoldStandard across cell types. GoldStandard is
+        # kept only where the median is exactly 1, i.e. a majority of cell types agree.
+        DF_median = pd.DataFrame([])
+        DF_median['Prediction'] = np.nanmedian(DF[range(0, np.shape(DF)[1], 2)], axis=1)
+        DF_median['GoldStandard'] = np.nanmedian(DF[range(1, np.shape(DF)[1], 2)], axis=1)
+        DF_median.loc[DF_median['GoldStandard'] != 1, 'GoldStandard'] = 0
+
+        agg_goldstandard = DF_median['GoldStandard'][blacklist_mask]
+        agg_prediction = DF_median['Prediction'][blacklist_mask]
+    else:
+        # Default: pool every cell type's bins together (stacked as rows) into one
+        # curve, rather than aggregating them into a single signal first.
+        DF_pooled = pd.concat(
+            [DF[[2 * i, 2 * i + 1]].rename(columns={2 * i: 'Prediction', 2 * i + 1: 'GoldStandard'})
+             for i in range(num_cell_types)],
+            ignore_index=True,
+        )
+        DF_pooled.loc[DF_pooled['GoldStandard'] != 1, 'GoldStandard'] = 0
+        # DF_pooled is block-major (all of cell type 0's bins, then all of cell type
+        # 1's, ...), so the mask must cycle once per block via np.tile, not np.repeat
+        # (which would smear each bin's mask across a run of num_cell_types rows).
+        blacklist_pooled = np.tile(blacklist_mask, num_cell_types)
+
+        agg_goldstandard = DF_pooled['GoldStandard'][blacklist_pooled]
+        agg_prediction = DF_pooled['Prediction'][blacklist_pooled]
+
+    precision, recall, thresholds = precision_recall_curve(agg_goldstandard, agg_prediction)
     
     
     # Create a dataframe from the results
@@ -171,7 +194,7 @@ def run_thresholding(args):
     cell_type_curves = []
     for i in range(len(OUT[0])):
         ct_curve = compute_calibration_curve(
-            DF[2 * i + 1][blacklist], DF[2 * i][blacklist], total_gs_bins[i], rand_bins
+            DF[2 * i + 1][blacklist_mask], DF[2 * i][blacklist_mask], total_gs_bins[i], rand_bins
         )
         ct_curve_sampled = sample_curve_at_thresholds(ct_curve, shared_thresholds)
         cell_type_curves.append({'name': os.path.basename(lst_of_bws[i]), 'curve': ct_curve_sampled})

@@ -1199,6 +1199,17 @@ def get_parser():
                                   help="Meta file containing Prediction signal and GS path for all cell lines (.tsv format)"
                                   )
 
+    threshold_parser.add_argument("--aggregation",
+                                  dest="aggregation",
+                                  type=str,
+                                  default="pooled",
+                                  choices=["pooled", "median"],
+                                  help="How to combine cell types into one calibration curve. 'pooled' (default) "
+                                       "concatenates every cell type's bins together into one curve. 'median' takes "
+                                       "the per-bin median Prediction/GoldStandard across cell types first, then "
+                                       "computes the curve on that (GoldStandard requires majority cell-type agreement)."
+                                  )
+
     #############################################
     # Model interpreting subparser
     #############################################
