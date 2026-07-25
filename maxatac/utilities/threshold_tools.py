@@ -49,12 +49,15 @@ def calculate_AUC_per_rank(PR_CURVE_DF, threshold):
             return metrics.auc(y=tmp_df["Precision"], x=tmp_df["Recall"])
 
 
-def compute_calibration_curve(goldstandard, prediction, gs_bins, rand_bins):
+def compute_calibration_curve(goldstandard, prediction, gs_bins=None, rand_bins=None):
     """
-    Build a monotonic Precision/Recall/Threshold/log2FC/F1 calibration curve for a
+    Build a monotonic Precision/Recall/Threshold calibration curve (plus F1) for a
     single goldstandard/prediction signal pair. Mirrors the median-curve calculation
     in run_thresholding, factored out so it can also be run per individual cell type
-    for visualization (see threshold.py).
+    for visualization (see threshold.py) and for the metric-binning pipeline below.
+
+    log2FC is only added when both gs_bins and rand_bins are supplied (needed for
+    plotting in run_thresholding); omit both to get just Precision/Recall/Threshold/F1.
     """
     precision, recall, thresholds = precision_recall_curve(goldstandard, prediction)
 
@@ -67,11 +70,203 @@ def compute_calibration_curve(goldstandard, prediction, gs_bins, rand_bins):
     new_row = curve_df.tail(n=1)
     curve_df = pd.concat([curve_df, new_row], ignore_index=True)
 
-    random_precision = gs_bins / rand_bins
-    curve_df['log2FC'] = np.log2(curve_df['Precision'] / random_precision)
+    if gs_bins is not None and rand_bins is not None:
+        random_precision = gs_bins / rand_bins
+        curve_df['log2FC'] = np.log2(curve_df['Precision'] / random_precision)
+
     curve_df['F1'] = 2 * (curve_df['Precision'] * curve_df['Recall']) / (curve_df['Precision'] + curve_df['Recall'])
 
     return curve_df
+
+
+def bin_curve_by_metric(curve_df, metric):
+    """
+    Bin a single cell type's calibration curve (Precision/Recall/Threshold/F1, e.g.
+    from compute_calibration_curve) by one of its metric columns into 0.01-wide
+    steps from 0.00 to 1.00, logging the threshold for each bin -- the same
+    technique hybrid_subset uses for its Precision grid, generalized to Precision,
+    Recall, and F1.
+
+    Precision/Recall are expected to already be monotonic w.r.t. Threshold. F1 is
+    NOT monotonic -- it rises then falls -- and is binned on its raw values here,
+    with no accumulate applied, so it isn't artificially flattened.
+
+    OPEN ISSUE (flagged, not resolved here): since F1 isn't forced monotonic, a
+    given F1 bin can genuinely be reachable at more than one threshold (once on
+    the way up, once on the way down). Only one row per bin is kept -- whichever
+    maximizes F1 within the bin (matching hybrid_subset's own convention) -- so
+    the other occurrence is dropped rather than retained as a separate row.
+    """
+    df = curve_df.copy()
+
+    df['_bin'] = ((df[metric].to_numpy() * 100).round().astype(int) / 100).clip(0, 1)
+
+    binned = df.loc[df.groupby('_bin')['F1'].idxmax()].copy()
+    binned = binned.rename(columns={'_bin': 'Bin'})
+    binned['Metric'] = metric
+
+    return binned[['Metric', 'Bin', 'Precision', 'Recall', 'Threshold', 'F1']].reset_index(drop=True)
+
+
+def extend_bins_to_full_grid(binned_df, full_bins=None):
+    """
+    Extend a single cell type's bin_curve_by_metric() result to cover every bin in
+    full_bins (default: 0.00 to 1.00 in 0.01 steps), even bins this cell type's own
+    curve never actually reached. Uses the same step-lookup + extrapolation
+    technique as sample_curve_at_thresholds, keyed on Bin instead of Threshold:
+    a forward merge_asof (the smallest available bin >= target) handles bins below
+    this cell type's own range, and ffill (holding the last real match) handles
+    bins above it.
+
+    This matters because bin_curve_by_metric's per-cell-type output is already
+    monotonic in Threshold vs. Bin (Precision/Recall are monotonic w.r.t. Threshold
+    before binning, so each bin's threshold-preimage is an ordered, non-overlapping
+    interval, and picking one row per interval preserves order). But different
+    cell types have gaps in different places, so without this extension,
+    median_bins_across_samples would compute each bin's median over a different
+    subset of cell types -- and per-cell-type ordering does not, in general, imply
+    ordering of the median once the pointwise (i.e. same-index) matching between
+    adjacent bins is broken. Extending every cell type to the same full bin grid
+    restores that matching, so the median stays monotonic too.
+    """
+    if full_bins is None:
+        full_bins = np.round(np.arange(0, 1.01, 0.01), 2)
+
+    binned_df = binned_df.drop_duplicates(subset='Bin').sort_values('Bin').reset_index(drop=True)
+    grid = pd.DataFrame({'Bin': np.sort(np.unique(full_bins))})
+
+    extended = pd.merge_asof(grid, binned_df, on='Bin', direction='forward')
+    extended = extended.ffill().bfill()
+
+    return extended
+
+
+def median_bins_across_samples(binned_tables, full_bins=None):
+    """
+    Combine one metric's binned tables across cell types (each from
+    bin_curve_by_metric, for the same metric) by taking the median of every
+    numeric column -- Precision, Recall, Threshold, F1 -- for each bin in
+    full_bins (default: 0.00 to 1.00 in 0.01 steps).
+
+    Each cell type's table is first extended to the full bin grid
+    (extend_bins_to_full_grid) so every bin's median is computed over the exact
+    same set of cell types -- see that function's docstring for why this is
+    needed to keep the result monotonic.
+    """
+    metric = binned_tables[0]['Metric'].iloc[0]
+    extended_tables = [extend_bins_to_full_grid(t, full_bins) for t in binned_tables]
+
+    merged = pd.concat(extended_tables, ignore_index=True)
+    combined = merged.groupby('Bin', as_index=False)[['Precision', 'Recall', 'Threshold', 'F1']].median()
+    combined.insert(0, 'Metric', metric)
+
+    return combined.sort_values('Bin').reset_index(drop=True)
+
+
+def recompute_f1(median_table):
+    """
+    Recompute F1 = 2*Precision*Recall/(Precision+Recall) from a median-across-
+    cell-type table's own Precision and Recall columns, replacing whatever F1
+    value is currently there.
+
+    median_bins_across_samples takes the median of Precision, Recall, and F1 as
+    independent columns; since each can come from a different cell type, the
+    resulting row is a synthetic point that doesn't generally satisfy
+    F1 = 2PR/(P+R) on its own (e.g. cell type A at P=0.9,R=0.3,F1=0.45 and cell
+    type B at P=0.3,R=0.9,F1=0.45 median to P=0.6,R=0.6, but 2*0.6*0.6/1.2=0.6,
+    not 0.45). Recomputing F1 from that same row's own median P/R keeps it
+    internally consistent, at the cost of no longer necessarily matching the
+    median of each cell type's own actual F1.
+    """
+    out = median_table.copy()
+    out['F1'] = 2 * out['Precision'] * out['Recall'] / (out['Precision'] + out['Recall'])
+    return out
+
+
+def bin_median_table_by_f1(median_tables):
+    """
+    Build the F1 grid from one or more already median-across-cell-type,
+    F1-recalculated tables (e.g. the Recall-binned table after recompute_f1),
+    rather than binning each cell type's own raw F1 independently. Pools the
+    given tables' rows, bins the pool by F1 (0.01 steps, clipped to [0, 1]), and
+    keeps the max-F1 row per bin -- same technique as bin_curve_by_metric, just
+    applied to the pooled, already-consensus rows instead of one cell type's raw
+    curve. Since every candidate row's F1 is already internally consistent with
+    its own Precision/Recall, so is whichever one gets picked per bin.
+
+    Pass a single table (e.g. just the Recall table) to keep Threshold ordering
+    sourced from one consistent table; pooling multiple tables mixes in more than
+    one independently-ordered source and can reintroduce non-monotonic jumps.
+    """
+    # Drop the source tables' own Bin/Metric (Precision- or Recall-bin, now stale)
+    # before computing the new F1-based Bin -- otherwise the rename below collides
+    # with the pre-existing 'Bin' column instead of replacing it.
+    pooled = pd.concat(median_tables, ignore_index=True).drop(columns=['Bin', 'Metric'])
+    pooled['Bin'] = ((pooled['F1'].to_numpy() * 100).round().astype(int) / 100).clip(0, 1)
+
+    binned = pooled.loc[pooled.groupby('Bin')['F1'].idxmax()].copy()
+    binned['Metric'] = 'F1'
+
+    return binned[['Metric', 'Bin', 'Precision', 'Recall', 'Threshold', 'F1']].sort_values('Bin').reset_index(drop=True)
+
+
+def merge_binned_metrics(median_tables):
+    """
+    Union the per-metric median-across-cell-type tables (one each for Precision,
+    Recall, F1 binning), sorted by Threshold. No deduplication across metrics.
+
+    Each table is already internally unique by construction: median_bins_across_samples
+    extends every cell type to the full 0.00-1.00 bin grid before taking the
+    median, so there's exactly one row per bin, with no gaps and no
+    within-metric collisions left to dedupe. And since build_cross_cell_type_threshold_table
+    now derives the F1 grid (bin_median_table_by_f1) by re-selecting rows from the
+    already-complete Precision/Recall pool rather than deriving new (Threshold,
+    Precision, Recall) points, most F1 rows are full-entry duplicates of a
+    Precision or Recall row *by construction*. Deduping across metrics (the
+    previous behavior) silently erased the entire F1 grid as a result -- every
+    F1 row lost to an identical Precision/Recall row that happened to list first.
+    Each row is still a legitimate, distinct answer to "what's the
+    median-consensus point for this bin of this metric," even when it numerically
+    coincides with a different metric's bin.
+    """
+    merged = pd.concat(median_tables, ignore_index=True)
+    merged = merged.sort_values('Threshold').reset_index(drop=True)
+
+    return merged
+
+
+def build_cross_cell_type_threshold_table(curves):
+    """
+    End-to-end pipeline: given one calibration curve per cell type (DataFrames
+    with Precision/Recall/Threshold/F1, e.g. from compute_calibration_curve):
+      1. Bin each cell type's curve by Precision and by Recall separately
+         (bin_curve_by_metric).
+      2. Extend each cell type's binned table to the full 0.00-1.00 bin grid
+         (extend_bins_to_full_grid, inside median_bins_across_samples) so every
+         bin's median is computed over the same set of cell types, keeping the
+         result monotonic.
+      3. Combine each metric's bins across cell types via the median
+         (median_bins_across_samples), then recompute F1 from each table's own
+         median Precision/Recall (recompute_f1) instead of independently
+         medianing F1 across cell types.
+      4. Build the F1 grid by binning the F1-recalculated Recall table by F1
+         (bin_median_table_by_f1) -- using only the Recall table, not Precision,
+         as the source. (Recall is fully populated across all 101 bins and
+         already the sole source of Threshold ordering here; pooling in the
+         Precision table as well previously mixed in a second, independently-
+         ordered source and produced a visible dip near the F1 peak.)
+      5. Merge the three metrics' tables into one, deduped on the full entry
+         (merge_binned_metrics).
+    """
+    precision_tables = [bin_curve_by_metric(curve, 'Precision') for curve in curves]
+    recall_tables = [bin_curve_by_metric(curve, 'Recall') for curve in curves]
+
+    precision_median = recompute_f1(median_bins_across_samples(precision_tables))
+    recall_median = recompute_f1(median_bins_across_samples(recall_tables))
+
+    f1_binned = bin_median_table_by_f1([recall_median])
+
+    return merge_binned_metrics([precision_median, recall_median, f1_binned])
 
 
 def sample_curve_at_thresholds(curve_df, threshold_values):
