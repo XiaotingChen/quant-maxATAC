@@ -35,9 +35,13 @@ The size of the bin to use for aggregating the single base-pair predictions. Def
 
 ### `--agg`
 
-The method to use for aggregating the single base-pair predictions into larger bins. Options include `max`, `min`, and `mean`. Default: `max` score found in the window.
+The method to use for aggregating the single base-pair predictions into larger bins. Options include `max`, `min`, `mean`, and `sum`. Default: `max` score found in the window.
 
 See the [pyBigWig documentation](https://github.com/deeptools/pyBigWig#compute-summary-information-on-a-range) for more details.
+
+### `--agg_threshold`
+
+When `--agg sum` is selected, the summed value is divided by the bin size and then converted to a binary label. Bins with values greater than or equal to this threshold become `1.0`; all others become `0.0`. Default: `0.7`.
 
 ### `--round_predictions`
 
