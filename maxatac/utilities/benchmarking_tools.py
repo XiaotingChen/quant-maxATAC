@@ -449,6 +449,7 @@ class ChromosomeAUPRC(object):
                  chromosome,
                  bin_size,
                  agg_function,
+                 agg_threshold,
                  results_location,
                  round_predictions,
                  plot=False,
@@ -478,6 +479,7 @@ class ChromosomeAUPRC(object):
 
         self.agg_function = agg_function
         self.prediction_combine_operation = prediction_combine_operation
+        self.agg_threshold = agg_threshold
 
         self.blacklist_mask = chromosome_blacklist_mask(blacklist_bw,
                                                         self.chromosome,
@@ -543,7 +545,14 @@ class ChromosomeAUPRC(object):
                                                                                         ),
                                                          dtype=float  # need it to have NaN instead of None
                                                          )
-                                                ) > 0  # to convert to boolean array
+                                                )
+
+        if self.agg_function == "sum":
+            self.goldstandard_array = np.where((self.goldstandard_array / self.bin_size) >= self.agg_threshold,
+                                               1.0,
+                                               0.0)
+        else:
+            self.goldstandard_array = self.goldstandard_array > 0
 
         self.random_precision = np.count_nonzero(self.goldstandard_array[self.blacklist_mask]) / \
                                 np.size(self.prediction_array[self.blacklist_mask])
