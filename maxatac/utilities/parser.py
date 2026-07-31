@@ -1292,7 +1292,29 @@ def get_parser():
         dest="agg_function",
         type=str,
         default=DEFAULT_BENCHMARKING_AGGREGATION_FUNCTION,
-        help="Aggregation function for binning (max, mean, min). Default: " + DEFAULT_BENCHMARKING_AGGREGATION_FUNCTION
+        help="Aggregation function for binning (max, mean, min, sum). Default: " + DEFAULT_BENCHMARKING_AGGREGATION_FUNCTION
+    )
+
+    model_interpreting_parser.add_argument(
+        "--agg_threshold",
+        dest="agg_threshold",
+        type=float,
+        default=DEFAULT_BENCHMARKING_AGGREGATION_THRESHOLD,
+        help="Threshold used when --agg sum is selected. The summed gold standard value is divided by the \
+              bin size and binarized to 1.0 when it is greater than or equal to this value. Default: " \
+              + str(DEFAULT_BENCHMARKING_AGGREGATION_THRESHOLD)
+    )
+
+    model_interpreting_parser.add_argument(
+        "--select_by",
+        dest="select_by",
+        type=str,
+        default="precision",
+        choices=["precision", "recall"],
+        help="Metric used to pick the classification threshold from the benchmark TSV. "
+             "'precision' (default) finds the highest-recall threshold with Precision >= "
+             "--precision_level. 'recall' finds the highest-precision threshold with Recall "
+             ">= --recall_level. Ignored if --threshold is set."
     )
 
     model_interpreting_parser.add_argument(
@@ -1300,7 +1322,17 @@ def get_parser():
         dest="precision_level",
         type=float,
         default=0.7,
-        help="Precision level at which to select the classification threshold from the benchmark TSV. Default: 0.7"
+        help="Precision level at which to select the classification threshold from the benchmark TSV. \
+              Used when --select_by precision (the default). Default: 0.7"
+    )
+
+    model_interpreting_parser.add_argument(
+        "--recall_level",
+        dest="recall_level",
+        type=float,
+        default=0.25,
+        help="Recall level at which to select the classification threshold from the benchmark TSV. \
+              Used when --select_by recall. Default: 0.25"
     )
 
     model_interpreting_parser.add_argument(
@@ -1308,7 +1340,9 @@ def get_parser():
         dest="threshold",
         type=float,
         default=None,
-        help="Classification threshold value. Overrides --precision_level selection when provided."
+        help="Directly set the classification threshold used for downstream TP/FP/TN/FN "
+             "classification, bypassing threshold selection entirely. When provided, this "
+             "value is used as-is and --select_by/--precision_level/--recall_level are ignored."
     )
 
     model_interpreting_parser.add_argument(

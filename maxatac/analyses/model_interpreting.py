@@ -10,10 +10,32 @@ from maxatac.utilities.genome_tools import load_bigwig, import_bigwig_stats_arra
 from maxatac.utilities.constants import INPUT_LENGTH
 
 
-def _select_threshold(benchmark_tsv, precision_level=0.7, threshold_override=None):
+def _select_threshold(benchmark_tsv, select_by="precision", precision_level=0.7,
+                       recall_level=0.25, threshold_override=None):
     if threshold_override is not None:
         return float(threshold_override)
-    df = pd.read_csv(benchmark_tsv, sep="\t")
+
+    df = pd.read_csv(benchmark_tsv, sep="\t").sort_values("Threshold").reset_index(drop=True)
+
+    # ChromosomeAUPRC's Precision/Recall are raw sklearn precision_recall_curve
+    # output, not guaranteed monotonic in Threshold order (sampling noise near
+    # ties/duplicate scores). Force the same monotone envelope threshold.py's
+    # superseded pooled/median path used to apply -- precision never dips as
+    # threshold rises, recall never blips upward -- so idxmax() below can't land
+    # on a noisy local spike right at the constraint boundary.
+    df["Precision"] = np.maximum.accumulate(df["Precision"])
+    df["Recall"] = np.minimum.accumulate(df["Recall"])
+
+    if select_by == "recall":
+        valid = df[df["Recall"] >= recall_level]
+        if valid.empty:
+            logging.warning(
+                "No threshold achieves recall >= %.2f; using threshold with highest recall"
+                % recall_level
+            )
+            return float(df.loc[df["Recall"].idxmax(), "Threshold"])
+        return float(valid.loc[valid["Precision"].idxmax(), "Threshold"])
+
     valid = df[df["Precision"] >= precision_level]
     if valid.empty:
         logging.warning(
@@ -51,7 +73,9 @@ def run_model_interpreting(args):
 
     threshold = _select_threshold(
         args.benchmark_tsv,
+        select_by=args.select_by,
         precision_level=args.precision_level,
+        recall_level=args.recall_level,
         threshold_override=args.threshold
     )
     logging.info("Using classification threshold: %.6f" % threshold)
@@ -85,6 +109,15 @@ def run_model_interpreting(args):
             gs_array = np.nan_to_num(
                 import_bigwig_stats_array(gs_bw, chrom, chrom_length, args.agg_function, bin_count)
             )
+            # Mirror __import_prediction_array__ / __import_goldstandard_array__
+            # (benchmarking_tools.py): under "sum" aggregation a bin's value is a
+            # base-pair-integrated total, not a per-base score, so both arrays must be
+            # divided by bin_size to stay on the same scale as max/mean aggregation
+            # before pred_array is compared against the externally-sourced `threshold`
+            # and gs_array is re-binarized against agg_threshold.
+            if args.agg_function == "sum":
+                pred_array = pred_array / args.bin_size
+                gs_array = np.where((gs_array / args.bin_size) >= args.agg_threshold, 1.0, 0.0)
 
             class_indices = _classify_indices(pred_array, gs_array, threshold)
 

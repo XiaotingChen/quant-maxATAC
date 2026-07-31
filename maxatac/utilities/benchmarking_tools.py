@@ -523,6 +523,15 @@ class ChromosomeAUPRC(object):
                                                          alternative_prediction_stream=self.alternative_prediction_stream,
                                                          combine_operation=self.prediction_combine_operation)
 
+        # Mirror __import_goldstandard_array__: under "sum" aggregation a bin's value is
+        # a base-pair-integrated total, not a per-base score, so it must be divided by
+        # bin_size to stay on the same scale as max/mean aggregation. Without this, the
+        # Threshold column derived below (via precision_recall_curve on this array) is
+        # on the raw sum scale, inconsistent with any consumer (e.g. model_interpreting.py)
+        # that classifies against an externally-sourced, normalized-scale threshold.
+        if self.agg_function == "sum":
+            self.prediction_array = self.prediction_array / self.bin_size
+
         self.prediction_array = np.round(self.prediction_array, round_prediction)
 
     def __import_goldstandard_array__(self):
