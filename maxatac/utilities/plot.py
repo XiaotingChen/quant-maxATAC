@@ -263,24 +263,32 @@ def plot_threshold_calibration_stats(median_curve, cell_type_curves, file_locati
     """
     Multi-panel threshold calibration plot: Precision, log2(FC), Recall, and F1 vs.
     Threshold. Each individual cell type's own curve is drawn in a distinct rainbow
-    color. The median-across-cell-type curve is drawn in black on the Precision,
-    Recall, and F1 panels -- each using only the median_curve rows whose 'Metric'
-    matches that panel (e.g. the Precision panel's black line uses only rows from
-    Precision-binning), so it isn't a mix of rows sourced from three different
-    metrics' binning passes. The log2FC panel has no black line, since log2FC isn't
-    one of the binned metrics in median_curve.
+    color, resampled onto that *panel's own* metric's threshold grid (see
+    cell_type_curves below) so it's directly comparable to that panel's median line
+    rather than a curve resampled on a threshold set mixing all three metrics. The
+    median-across-cell-type curve is drawn in black on the Precision, Recall, and F1
+    panels -- each using only the median_curve rows whose 'Metric' matches that panel
+    (e.g. the Precision panel's black line uses only rows from Precision-binning), so
+    it isn't a mix of rows sourced from three different metrics' binning passes. The
+    log2FC panel has no black line (log2FC isn't one of the binned metrics in
+    median_curve) and reuses the Precision-panel's threshold grid, since log2FC is
+    itself derived from Precision.
 
     median_curve: DataFrame with a 'Metric' column (one of 'Precision'/'Recall'/'F1'
       per row, e.g. from build_cross_cell_type_threshold_table) plus Precision,
       Recall, Threshold, log2FC, F1 columns.
-    cell_type_curves: list of {'name': str, 'curve': DataFrame with Precision/Recall/
-      Threshold/log2FC/F1 columns}.
+    cell_type_curves: list of {'name': str, 'curves': {'Precision': DataFrame,
+      'Recall': DataFrame, 'F1': DataFrame}}, each DataFrame resampled (via
+      sample_curve_at_thresholds) onto that metric's own Threshold values, with
+      Precision/Recall/Threshold/log2FC/F1 columns.
     """
     plt.style.use(style)
     fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(15, 12))
 
     # Fourth element is which median_curve['Metric'] value feeds that panel's black
-    # line; None means no black line (log2FC isn't a binned metric).
+    # line, and which of ct['curves'] each colored line is resampled onto; None
+    # means no black line (log2FC isn't a binned metric), falling back to the
+    # Precision threshold grid since log2FC is derived from Precision.
     panels = [
         (axs[0, 0], "Precision", "Precision", "Precision"),
         (axs[0, 1], "log2FC", "log2(FC)", None),
@@ -293,11 +301,16 @@ def plot_threshold_calibration_stats(median_curve, cell_type_curves, file_locati
 
     max_threshold = median_curve["Threshold"].max()
     if cell_type_curves:
-        max_threshold = max(max_threshold, max(ct["curve"]["Threshold"].max() for ct in cell_type_curves))
+        max_threshold = max(
+            max_threshold,
+            max(curve_df["Threshold"].max() for ct in cell_type_curves for curve_df in ct["curves"].values())
+        )
 
     for ax, col, label, metric_filter in panels:
+        metric_key = metric_filter if metric_filter is not None else "Precision"
         for color, ct in zip(colors, cell_type_curves):
-            ax.plot(ct["curve"]["Threshold"], ct["curve"][col], c=color, lw=1.2, alpha=0.85, label=ct["name"])
+            ct_curve = ct["curves"][metric_key]
+            ax.plot(ct_curve["Threshold"], ct_curve[col], c=color, lw=1.2, alpha=0.85, label=ct["name"])
         if metric_filter is not None:
             panel_median = median_curve[median_curve["Metric"] == metric_filter].sort_values("Threshold")
             ax.plot(panel_median["Threshold"], panel_median[col], c="black", lw=3, label="Median")

@@ -218,15 +218,28 @@ def run_thresholding(args):
 
     logging.info("Plotting the validation statistics v. threshold values")
 
-    # Plot on the cross-cell-type table's own threshold grid: resample each cell
-    # type's raw curve onto those Threshold values (step lookup, extrapolating past
-    # a curve's own range) so every line -- and the cross-cell-type table itself,
-    # used as the "median" reference curve -- share the same x-axis.
-    shared_thresholds = cross_celltype_table['Threshold'].to_numpy()
+    # Plot each metric panel on that metric's *own* threshold grid, not the full
+    # cross_celltype_table (which mixes Precision-, Recall-, and F1-binned
+    # consensus thresholds together via merge_binned_metrics). Resampling every
+    # cell type's raw curve at that mixed set meant, e.g., the Precision panel's
+    # colored lines were evaluated at ~3x more (and differently-sourced) threshold
+    # points than the black Precision-only median line -- a real, faithfully
+    # reported difference in each cell type's own curve, but not one comparable
+    # point-for-point against the median. Resampling per metric instead means each
+    # panel's colored lines and its median line share exactly the same threshold
+    # set (and, since each metric's table has one row per 0.01 bin, the same
+    # order of resolution).
+    metric_thresholds = {
+        metric: cross_celltype_table.loc[cross_celltype_table['Metric'] == metric, 'Threshold'].to_numpy()
+        for metric in ('Precision', 'Recall', 'F1')
+    }
     cell_type_curves = []
     for i, ct_curve in enumerate(raw_cell_type_curves):
-        ct_curve_sampled = sample_curve_at_thresholds(ct_curve, shared_thresholds)
-        cell_type_curves.append({'name': os.path.basename(lst_of_bws[i]), 'curve': ct_curve_sampled})
+        curves_by_metric = {
+            metric: sample_curve_at_thresholds(ct_curve, thresholds)
+            for metric, thresholds in metric_thresholds.items()
+        }
+        cell_type_curves.append({'name': os.path.basename(lst_of_bws[i]), 'curves': curves_by_metric})
 
     # plot_threshold_calibration_stats also needs a log2FC column, which
     # build_cross_cell_type_threshold_table doesn't produce (it only tracks

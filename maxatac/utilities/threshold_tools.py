@@ -64,7 +64,14 @@ def compute_calibration_curve(goldstandard, prediction, gs_bins=None, rand_bins=
     P = np.maximum.accumulate(np.array(precision))
     R = np.minimum.accumulate(np.array(recall))
 
-    curve_df = pd.DataFrame({'Precision': P, 'Recall': R, "Threshold": np.insert(thresholds, 0, 0)})
+    # thresholds has one fewer element than precision/recall (sklearn convention):
+    # precision[:-1]/recall[:-1] correspond 1:1 with thresholds, and precision[-1]=1.0/
+    # recall[-1]=0.0 is a sentinel with no achievable threshold ("higher than every
+    # prediction"). Append the last real threshold as its label instead of inserting 0
+    # at the front, which previously shifted every real pairing back by one position
+    # (and mislabeled the sentinel with a finite, achievable threshold).
+    threshold_col = np.append(thresholds, thresholds[-1])
+    curve_df = pd.DataFrame({'Precision': P, 'Recall': R, "Threshold": threshold_col})
     # Duplicate the last row rather than forcing Threshold=1: these are quant models,
     # so the max predicted value (and therefore the max threshold) can exceed 1.0.
     new_row = curve_df.tail(n=1)
