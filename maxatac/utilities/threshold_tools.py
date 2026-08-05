@@ -119,22 +119,36 @@ def extend_bins_to_full_grid(binned_df, full_bins=None):
     """
     Extend a single cell type's bin_curve_by_metric() result to cover every bin in
     full_bins (default: 0.00 to 1.00 in 0.01 steps), even bins this cell type's own
-    curve never actually reached. Uses the same step-lookup + extrapolation
-    technique as sample_curve_at_thresholds, keyed on Bin instead of Threshold:
-    a forward merge_asof (the smallest available bin >= target) handles bins below
-    this cell type's own range, and ffill (holding the last real match) handles
-    bins above it.
+    curve never actually reached. Missing bins strictly between two real bins are
+    filled by linear interpolation (Precision, Recall, Threshold all move together
+    proportionally from one real row to the next) rather than copying the nearest
+    real row verbatim -- a large gap (e.g. one cell type's curve jumping straight
+    from precision 0.83 to 1.00 with nothing in between) previously meant every bin
+    inside that gap got an identical copy of whichever real row was nearest, which
+    then distorted the cross-cell-type median for every one of those bins at once.
+    Genuine exterior gaps (before this cell type's first real bin or after its last)
+    fall back to holding the nearest real row flat, same as before -- but in
+    practice this essentially never triggers for Precision or Recall specifically:
+    compute_calibration_curve's accumulate step plus sklearn's guaranteed terminal
+    sentinel row (Precision=1.0, Recall=0.0, forced by np.maximum.accumulate /
+    np.minimum.accumulate at the curve's own last row) mean every cell type's
+    Precision-binned table always has a real row at bin 1.00, and every Recall-
+    binned table always has real rows at both bin 0.00 and bin 1.00 -- so a
+    "missing edge with nothing to interpolate against" case doesn't actually arise
+    for these two metrics; it's automatically covered as an ordinary interior gap.
 
     This matters because bin_curve_by_metric's per-cell-type output is already
     monotonic in Threshold vs. Bin (Precision/Recall are monotonic w.r.t. Threshold
     before binning, so each bin's threshold-preimage is an ordered, non-overlapping
-    interval, and picking one row per interval preserves order). But different
-    cell types have gaps in different places, so without this extension,
-    median_bins_across_samples would compute each bin's median over a different
-    subset of cell types -- and per-cell-type ordering does not, in general, imply
-    ordering of the median once the pointwise (i.e. same-index) matching between
-    adjacent bins is broken. Extending every cell type to the same full bin grid
-    restores that matching, so the median stays monotonic too.
+    interval, and picking one row per interval preserves order) -- linear
+    interpolation between two such ordered real anchors stays within their bounds,
+    so it preserves that same monotonicity. But different cell types have gaps in
+    different places, so without this extension, median_bins_across_samples would
+    compute each bin's median over a different subset of cell types -- and
+    per-cell-type ordering does not, in general, imply ordering of the median once
+    the pointwise (i.e. same-index) matching between adjacent bins is broken.
+    Extending every cell type to the same full bin grid restores that matching, so
+    the median stays monotonic too.
     """
     if full_bins is None:
         full_bins = np.round(np.arange(0, 1.01, 0.01), 2)
@@ -142,10 +156,26 @@ def extend_bins_to_full_grid(binned_df, full_bins=None):
     binned_df = binned_df.drop_duplicates(subset='Bin').sort_values('Bin').reset_index(drop=True)
     grid = pd.DataFrame({'Bin': np.sort(np.unique(full_bins))})
 
-    extended = pd.merge_asof(grid, binned_df, on='Bin', direction='forward')
-    extended = extended.ffill().bfill()
+    extended = grid.merge(binned_df, on='Bin', how='left')
+    # method='linear' interpolates by row position, not by the 'Bin' value itself --
+    # but since grid is evenly spaced (0.01 per row) and rows are already sorted by
+    # Bin, row position and Bin position coincide, so this is exact. limit_direction=
+    # 'both' also fills exterior gaps, but linear interpolation can't extrapolate a
+    # slope past a single-sided boundary -- it just holds that nearest real value
+    # flat there, same fallback as before for the rare (Precision-only, low-bin)
+    # exterior case that isn't already covered by the guaranteed sentinel rows above.
+    extended[['Precision', 'Recall', 'Threshold', 'F1']] = extended[
+        ['Precision', 'Recall', 'Threshold', 'F1']
+    ].interpolate(method='linear', limit_direction='both')
+    extended['Metric'] = extended['Metric'].ffill().bfill()
 
-    return extended
+    # Recompute F1 from the (possibly just-interpolated) Precision/Recall rather
+    # than trust independently-interpolated F1, for the same internal-consistency
+    # reason recompute_f1 exists elsewhere: 2PR/(P+R) computed after interpolating
+    # P and R separately isn't guaranteed to equal F1 interpolated on its own.
+    extended['F1'] = 2 * extended['Precision'] * extended['Recall'] / (extended['Precision'] + extended['Recall'])
+
+    return extended[['Metric', 'Bin', 'Precision', 'Recall', 'Threshold', 'F1']]
 
 
 def median_bins_across_samples(binned_tables, full_bins=None):

@@ -6,7 +6,7 @@ from multiprocessing import Pool, Manager
 import time
 from maxatac.utilities.genome_tools import build_chrom_sizes_dict, get_bigwig_stats
 from maxatac.utilities.system_tools import get_dir
-from maxatac.utilities.threshold_tools import import_blacklist_mask, import_GoldStandard_array, calculate_AUC_per_rank, hybrid_subset, compute_calibration_curve, sample_curve_at_thresholds, build_cross_cell_type_threshold_table
+from maxatac.utilities.threshold_tools import import_blacklist_mask, import_GoldStandard_array, calculate_AUC_per_rank, hybrid_subset, compute_calibration_curve, bin_curve_by_metric, extend_bins_to_full_grid, bin_median_table_by_f1, merge_binned_metrics, build_cross_cell_type_threshold_table
 from maxatac.utilities.plot import plot_threshold_calibration_stats
 from sklearn.metrics import precision_recall_curve
 from sklearn import metrics
@@ -218,27 +218,54 @@ def run_thresholding(args):
 
     logging.info("Plotting the validation statistics v. threshold values")
 
-    # Plot each metric panel on that metric's *own* threshold grid, not the full
-    # cross_celltype_table (which mixes Precision-, Recall-, and F1-binned
-    # consensus thresholds together via merge_binned_metrics). Resampling every
-    # cell type's raw curve at that mixed set meant, e.g., the Precision panel's
-    # colored lines were evaluated at ~3x more (and differently-sourced) threshold
-    # points than the black Precision-only median line -- a real, faithfully
-    # reported difference in each cell type's own curve, but not one comparable
-    # point-for-point against the median. Resampling per metric instead means each
-    # panel's colored lines and its median line share exactly the same threshold
-    # set (and, since each metric's table has one row per 0.01 bin, the same
-    # order of resolution).
-    metric_thresholds = {
-        metric: cross_celltype_table.loc[cross_celltype_table['Metric'] == metric, 'Threshold'].to_numpy()
-        for metric in ('Precision', 'Recall', 'F1')
-    }
+    # Plot each cell type's OWN binned+extended curve directly (bin_curve_by_metric +
+    # extend_bins_to_full_grid -- the same per-cell-type step build_cross_cell_type_
+    # threshold_table already does before taking the cross-cell-type median), rather
+    # than resampling its raw curve at the median table's own consensus thresholds.
+    # Resampling at a foreign (median) threshold meant one cell type's curve could get
+    # evaluated at a threshold badly distorted by a *different* cell type's own gap:
+    # when a cell type has no real data between two precision levels, extend_bins_to_
+    # full_grid forward-fills a distant, much-higher threshold across that whole gap,
+    # which then drags the cross-cell-type median threshold up for those bins too --
+    # confirmed concretely in real data (ATF1: bin 0.83->0.84 jumped Precision
+    # 0.830->0.918 and Threshold 10.04->12.74 in a single 0.01-bin step). Evaluating
+    # the OTHER cell type's smooth curve at that distorted threshold overstated its
+    # precision there. Using each cell type's own table means its line only ever
+    # reflects its own genuine Bin/Threshold/Precision relationship, never
+    # contaminated by another cell type's gap -- any crossing that remains reflects
+    # real disagreement between cell types on threshold-for-precision, not a
+    # resampling artifact.
     cell_type_curves = []
     for i, ct_curve in enumerate(raw_cell_type_curves):
-        curves_by_metric = {
-            metric: sample_curve_at_thresholds(ct_curve, thresholds)
-            for metric, thresholds in metric_thresholds.items()
-        }
+        random_precision_i = total_gs_bins[i] / rand_bins
+        precision_curve = extend_bins_to_full_grid(bin_curve_by_metric(ct_curve, 'Precision'))
+        recall_curve = extend_bins_to_full_grid(bin_curve_by_metric(ct_curve, 'Recall'))
+
+        # Save this cell type's own binned threshold table standalone, same schema
+        # as cross_celltype.tsv (Metric/Bin/Precision/Recall/Threshold/F1), so
+        # per-sample calibration data is available on its own, not just embedded in
+        # the plot. F1 rows are picked via bin_median_table_by_f1 (same technique
+        # the cross-cell-type table's own F1 block uses) rather than reusing
+        # recall_curve verbatim: a saved table has no continuity implication the way
+        # a plotted line does, so the fuller, properly-selected F1 rows are fine
+        # here even though they're not used for the plotted F1 line below.
+        sample_table = merge_binned_metrics([precision_curve, recall_curve, bin_median_table_by_f1([recall_curve])])
+        sample_name = os.path.splitext(os.path.basename(lst_of_bws[i]))[0]
+        sample_table.to_csv(os.path.join(output_dir, sample_name + ".tsv"), sep="\t", header=True, index=False)
+
+        # F1 is not monotonic in Threshold (rises then falls). Re-binning it by its
+        # own value -- even from a single, already-Threshold-monotonic source table --
+        # still reintroduces non-monotonic jumps: near the peak, two different
+        # thresholds (one on the rise, one on the fall) can land in the same F1 bin,
+        # and idxmax can flip between them as the target bin shifts slightly (this
+        # was tested directly and produced a visibly zigzagging line). Re-binning by
+        # F1 only exists to build a *shared consensus* grid across multiple cell
+        # types for the median table; a single cell type doesn't need that -- its own
+        # Recall-binned curve already carries a real, Threshold-monotonic F1 column
+        # straight from its own curve, so just reuse it directly.
+        curves_by_metric = {'Precision': precision_curve, 'Recall': recall_curve, 'F1': recall_curve.copy()}
+        for curve in curves_by_metric.values():
+            curve['log2FC'] = np.log2(curve['Precision'] / random_precision_i)
         cell_type_curves.append({'name': os.path.basename(lst_of_bws[i]), 'curves': curves_by_metric})
 
     # plot_threshold_calibration_stats also needs a log2FC column, which
