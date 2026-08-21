@@ -231,7 +231,9 @@ def get_input_matrix(signal_stream,
                      cols=INPUT_LENGTH,
                      bp_order=BP_ORDER,
                      use_complement=False,
-                     reverse_matrix=False
+                     reverse_matrix=False,
+                     ablation_type="none",
+                     ablation_value=0.0
                      ):
     """
     Get a matrix of values from the corresponding genomic position. You can supply whether you want to use the
@@ -247,25 +249,37 @@ def get_input_matrix(signal_stream,
     :param end: end
     :param use_complement: use complement strand for training
     :param reverse_matrix: reverse the input matrix
+    :param ablation_type: "none", "signal", or "sequence". "signal" replaces the ATAC-seq signal
+        channel with ablation_value; "sequence" dinucleotide-shuffles the DNA sequence channels.
+    :param ablation_value: fixed value used for the signal channel when ablation_type == "signal"
 
     :return: a matrix (rows x cols) of values from the input bigwig files
     """
 
     input_matrix = np.zeros((rows, cols))
+
+    # Get the sequence from the interval of interest
+    target_sequence = Seq(sequence_stream.sequence(chromosome, start, end))
+
+    if use_complement:
+        # Get the complement of the sequence
+        target_sequence = target_sequence.complement()
+
+    if ablation_type == "sequence":
+        from ushuffle import shuffle
+        # Dinucleotide-shuffle the sequence once, then one-hot encode the same shuffled
+        # sequence for every channel below
+        target_sequence = Seq(shuffle(str(target_sequence).encode(), 2).decode())
+
     for n, bp in enumerate(bp_order):
-        # Get the sequence from the interval of interest
-        target_sequence = Seq(sequence_stream.sequence(chromosome, start, end))
-
-        if use_complement:
-            # Get the complement of the sequence
-            target_sequence = target_sequence.complement()
-
         # Get the one hot encoded sequence
         input_matrix[n, :] = get_one_hot_encoded(target_sequence, bp)
 
-    #signal_array = np.array(signal_stream.values(chromosome, start, end))
-    signal_array=np.array(np.zeros(1024))
-    input_matrix[4, :] = signal_array
+    if ablation_type == "signal":
+        input_matrix[4, :] = np.full(cols, ablation_value)
+    else:
+        signal_array = np.array(signal_stream.values(chromosome, start, end))
+        input_matrix[4, :] = signal_array
 
     # If reverse_matrix then reverse the matrix. This changes the left to right orientation.
     if reverse_matrix:

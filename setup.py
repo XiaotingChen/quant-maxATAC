@@ -93,7 +93,8 @@ setup(
         "pyyaml",
         "pysam",
         "seaborn",
-        "pytest"
+        "pytest",
+        "ushuffle"
     ],
     zip_safe=False,
     scripts=["maxatac/bin/maxatac"],

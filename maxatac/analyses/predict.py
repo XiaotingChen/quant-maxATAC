@@ -10,6 +10,7 @@ import multiprocessing
 import pybedtools
 from multiprocessing import Pool, Manager
 from maxatac.utilities.system_tools import get_dir, Mute
+from maxatac.utilities.constants import INPUT_CHANNELS, INPUT_LENGTH
 
 with Mute():
     from maxatac.utilities.genome_tools import build_chrom_sizes_dict
@@ -99,6 +100,8 @@ def run_prediction(args):
                  "Chromosomes in final prediction set: \n   - " + "\n    -".join(chrom_list) + "\n" +
                  f"Output directory: {output_directory} \n" +
                  f"Batch Size: {args.batch_size} \n" +
+                 f"Ablation type: {args.ablation_type} \n" +
+                 f"Ablation value: {args.ablation_value} \n" +
                  f"Output filename: {outfile_name_bigwig}"
                  )
 
@@ -110,7 +113,12 @@ def run_prediction(args):
                                                  args.model,
                                                  args.batch_size,
                                                  False,
-                                                 chromosome) for chromosome in chrom_list])
+                                                 chromosome,
+                                                 32,
+                                                 INPUT_CHANNELS,
+                                                 INPUT_LENGTH,
+                                                 args.ablation_type,
+                                                 args.ablation_value) for chromosome in chrom_list])
 
     # Write the predictions to a bigwig file and add name to args
     prediction_bedgraph = pd.concat(forward_strand_predictions)

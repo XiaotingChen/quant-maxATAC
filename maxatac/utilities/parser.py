@@ -254,6 +254,25 @@ def get_parser():
                                 help="Input ATACseq bigwig file."
                                 )
 
+    predict_parser.add_argument("--ablation_type",
+                                dest="ablation_type",
+                                type=str,
+                                choices=["none", "signal", "sequence"],
+                                default="none",
+                                help="Ablate part of the input before prediction. 'signal' replaces the "
+                                     "ATAC-seq signal channel with a fixed value (see --ablation_value); "
+                                     "'sequence' dinucleotide-shuffles the DNA sequence channels. "
+                                     "Default: none (no ablation)."
+                                )
+
+    predict_parser.add_argument("--ablation_value",
+                                dest="ablation_value",
+                                type=float,
+                                default=0.0,
+                                help="Fixed value to substitute into the ATAC-seq signal channel when "
+                                     "--ablation_type signal is used. Default: 0.0"
+                                )
+
     predict_parser.add_argument("-o", "--output",
                                 dest="output_directory",
                                 type=str,
