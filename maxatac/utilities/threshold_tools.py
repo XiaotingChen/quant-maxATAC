@@ -250,7 +250,8 @@ def bin_median_table_by_f1(median_tables):
 def merge_binned_metrics(median_tables):
     """
     Union the per-metric median-across-cell-type tables (one each for Precision,
-    Recall, F1 binning), sorted by Threshold. No deduplication across metrics.
+    Recall, F1 binning), grouped by Metric (in Precision/Recall/F1 order) and
+    sorted by Bin (ascending) within each group. No deduplication across metrics.
 
     Each table is already internally unique by construction: median_bins_across_samples
     extends every cell type to the full 0.00-1.00 bin grid before taking the
@@ -267,7 +268,9 @@ def merge_binned_metrics(median_tables):
     coincides with a different metric's bin.
     """
     merged = pd.concat(median_tables, ignore_index=True)
-    merged = merged.sort_values('Threshold').reset_index(drop=True)
+    merged['Metric'] = pd.Categorical(merged['Metric'], categories=['Precision', 'Recall', 'F1'], ordered=True)
+    merged = merged.sort_values(['Metric', 'Bin']).reset_index(drop=True)
+    merged['Metric'] = merged['Metric'].astype(str)
 
     return merged
 

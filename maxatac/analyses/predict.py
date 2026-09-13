@@ -52,12 +52,40 @@ def run_prediction(args):
     if args.TF:
         args.model = glob.glob(os.path.join(args.DATA_PATH, "models", args.TF, args.TF + "*.h5"))[0]
 
-        args.cutoff_file = glob.glob(os.path.join(args.DATA_PATH, "models", args.TF, args.TF + "*.tsv"))[0]
+        # An explicitly provided --cutoff_file wins; only fall back to the bundled table.
+        if not args.cutoff_file:
+            cutoff_files = glob.glob(
+                os.path.join(args.DATA_PATH, "models", args.TF, args.TF + "*_cross_celltype.tsv")
+            )
+
+            if not cutoff_files:
+                raise FileNotFoundError(
+                    f"No threshold calibration table (*_cross_celltype.tsv) found for {args.TF} in "
+                    f"{os.path.join(args.DATA_PATH, 'models', args.TF)}. Generate one with "
+                    "`maxatac threshold`, or pass one with --cutoff_file."
+                )
+
+            args.cutoff_file = cutoff_files[0]
 
     else:
         pass
 
     logging.info(f"Using maxATAC model: {args.model} to make predictions")
+
+    call_peaks = bool(args.cutoff_file) and args.skip_call_peaks is False
+
+    if call_peaks:
+        # Resolve the threshold up front: an unusable cutoff type/value combination should
+        # fail now rather than after inference and the bigwig write have completed.
+        thresh = get_threshold(cutoff_file=args.cutoff_file,
+                               cutoff_type=args.cutoff_type,
+                               cutoff_val=args.cutoff_value)
+
+    elif args.skip_call_peaks:
+        logging.info("Skipping peak calling: --skip_call_peaks was set")
+
+    else:
+        logging.info("Skipping peak calling: no threshold calibration table provided (--cutoff_file)")
 
     # predict on all chromosomes
     if args.chromosomes[0] == 'all':
@@ -123,14 +151,10 @@ def run_prediction(args):
                                 )
 
     # If a cutoff file is provided, call peaks
-    if args.cutoff_file and args.skip_call_peaks is False:
+    if call_peaks:
         args.input_bigwig = outfile_name_bigwig
 
         peaks_filename = os.path.join(output_directory, args.name + "_peaks.bed")
-
-        thresh = get_threshold(cutoff_file=args.cutoff_file,
-                               cutoff_type=args.cutoff_type,
-                               cutoff_val=args.cutoff_value)
 
         logging.info(f"Writing predictions to a BED file: {peaks_filename}" +
                      f"\n Cutoff type for Threshold: {args.cutoff_type}" +

@@ -239,7 +239,8 @@ def get_parser():
                                 dest="quant",
                                 action='store_true',
                                 default=False,
-                                help="This argument should be set to true to build models based on quantitative data"
+                                help="NOT IMPLEMENTED for predict: accepted but ignored. Quantitative \
+                                      prediction follows from the model provided via --tf_name/--model."
                                 )
 
     predict_parser.add_argument("--seq", "--sequence",
@@ -332,19 +333,25 @@ def get_parser():
                                 dest="cutoff_type",
                                 default="F1",
                                 type=str,
-                                help="Cutoff type (i.e. Precision)"
+                                choices=["Precision", "Recall", "F1"],
+                                help="Metric whose calibration grid is used to pick the peak calling \
+                                      threshold. Default: F1"
                                 )
 
     predict_parser.add_argument("-cv", "-cutoff_value", "--cutoff_value",
                                 dest="cutoff_value",
                                 type=float,
-                                help="Cutoff value for the cutoff type provided. Not used with F1 score."
+                                help="Cutoff value for the cutoff type provided. Optional for F1, where \
+                                      omitting it selects the threshold with the highest F1."
                                 )
 
     predict_parser.add_argument("-cf", "-cutoff_file", "--cutoff_file",
                                 dest="cutoff_file",
                                 type=str,
-                                help="Cutoff file provided in /data/models"
+                                help="Threshold calibration table written by `maxatac threshold`, used to \
+                                      turn --cutoff_type/--cutoff_value into a peak calling threshold. \
+                                      Resolved from the bundled table in /data/models when --tf_name is \
+                                      used. Without it, peak calling is skipped."
                                 )
 
     predict_parser.add_argument("-skip_call_peaks", "--skip_call_peaks",
@@ -879,8 +886,8 @@ def get_parser():
     peaks_parser.set_defaults(func=run_call_peaks)
 
     # Add arguments to the parser
-    peaks_parser.add_argument("-prefix", "--prefix",
-                              dest="prefix",
+    peaks_parser.add_argument("-n", "--name", "-prefix", "--prefix",
+                              dest="name",
                               type=str,
                               required=False,
                               help="Output prefix filename. Defaults: remove .bw extension."
@@ -894,7 +901,7 @@ def get_parser():
                               )
 
     peaks_parser.add_argument("-o", "--output",
-                              dest="output",
+                              dest="output_directory",
                               type=str,
                               default="./peaks",
                               help="Output directory."
@@ -911,13 +918,16 @@ def get_parser():
                               dest="cutoff_type",
                               default="F1",
                               type=str,
-                              help="Cutoff type (i.e. Precision). Default: F1"
+                              choices=["Precision", "Recall", "F1"],
+                              help="Metric whose calibration grid is used to pick the peak calling \
+                                    threshold. Default: F1"
                               )
 
     peaks_parser.add_argument("-cutoff_value", "--cutoff_value",
                               dest="cutoff_value",
                               type=float,
-                              help="Cutoff value for the cutoff type provided"
+                              help="Cutoff value for the cutoff type provided. Optional for F1, where \
+                                    omitting it selects the threshold with the highest F1."
                               )
 
     peaks_parser.add_argument("-cutoff_file", "--cutoff_file",
