@@ -41,7 +41,7 @@ See the [pyBigWig documentation](https://github.com/deeptools/pyBigWig#compute-s
 
 ### `--agg_threshold`
 
-When `--agg sum` is selected, the summed value is divided by the bin size and then converted to a binary label. Bins with values greater than or equal to this threshold become `1.0`; all others become `0.0`. Default: `0.7`.
+When `--agg sum` is selected, the summed value is divided by the bin size and then converted to a binary label. Bins with values greater than or equal to this threshold become `1.0`; all others become `0.0`. Default: `0.5`.
 
 ### `--round_predictions`
 
