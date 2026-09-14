@@ -109,6 +109,7 @@ OUTPUT_ACTIVATION = "sigmoid"  # binary default; quant models pass --output_acti
 
 # Benchmarking Constants
 DEFAULT_BENCHMARKING_AGGREGATION_FUNCTION = "max"
+DEFAULT_BENCHMARKING_AGGREGATION_THRESHOLD = 0.5
 DEFAULT_BENCHMARKING_BIN_SIZE = 200
 
 # Factor for scaling Targets for quant models.

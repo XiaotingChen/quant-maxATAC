@@ -258,6 +258,77 @@ def export_prc(precision, recall, file_location, title="Precision Recall Curve",
     plt.close("all")
 
 
+def plot_threshold_calibration_stats(median_curve, cell_type_curves, file_location, prefix,
+                                     suffix="_validationPerformance_vs_thresholdCalibration", ext=".png", style="ggplot"):
+    """
+    Multi-panel threshold calibration plot: Precision, log2(FC), Recall, and F1 vs.
+    Threshold. Each individual cell type's own curve is drawn in a distinct rainbow
+    color, resampled onto that *panel's own* metric's threshold grid (see
+    cell_type_curves below) so it's directly comparable to that panel's median line
+    rather than a curve resampled on a threshold set mixing all three metrics. The
+    median-across-cell-type curve is drawn in black on the Precision, Recall, and F1
+    panels -- each using only the median_curve rows whose 'Metric' matches that panel
+    (e.g. the Precision panel's black line uses only rows from Precision-binning), so
+    it isn't a mix of rows sourced from three different metrics' binning passes. The
+    log2FC panel has no black line (log2FC isn't one of the binned metrics in
+    median_curve) and reuses the Precision-panel's threshold grid, since log2FC is
+    itself derived from Precision.
+
+    median_curve: DataFrame with a 'Metric' column (one of 'Precision'/'Recall'/'F1'
+      per row, e.g. from build_cross_cell_type_threshold_table) plus Precision,
+      Recall, Threshold, log2FC, F1 columns.
+    cell_type_curves: list of {'name': str, 'curves': {'Precision': DataFrame,
+      'Recall': DataFrame, 'F1': DataFrame}}, each DataFrame resampled (via
+      sample_curve_at_thresholds) onto that metric's own Threshold values, with
+      Precision/Recall/Threshold/log2FC/F1 columns.
+    """
+    plt.style.use(style)
+    fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(15, 12))
+
+    # Fourth element is which median_curve['Metric'] value feeds that panel's black
+    # line, and which of ct['curves'] each colored line is resampled onto; None
+    # means no black line (log2FC isn't a binned metric), falling back to the
+    # Precision threshold grid since log2FC is derived from Precision.
+    panels = [
+        (axs[0, 0], "Precision", "Precision", "Precision"),
+        (axs[0, 1], "log2FC", "log2(FC)", None),
+        (axs[1, 0], "Recall", "Recall", "Recall"),
+        (axs[1, 1], "F1", "F1 Score", "F1"),
+    ]
+
+    n_curves = max(len(cell_type_curves), 1)
+    colors = plt.cm.rainbow(np.linspace(0, 1, n_curves))
+
+    max_threshold = median_curve["Threshold"].max()
+    if cell_type_curves:
+        max_threshold = max(
+            max_threshold,
+            max(curve_df["Threshold"].max() for ct in cell_type_curves for curve_df in ct["curves"].values())
+        )
+
+    for ax, col, label, metric_filter in panels:
+        metric_key = metric_filter if metric_filter is not None else "Precision"
+        for color, ct in zip(colors, cell_type_curves):
+            ct_curve = ct["curves"][metric_key]
+            ax.plot(ct_curve["Threshold"], ct_curve[col], c=color, lw=1.2, alpha=0.85, label=ct["name"])
+        if metric_filter is not None:
+            panel_median = median_curve[median_curve["Metric"] == metric_filter].sort_values("Threshold")
+            ax.plot(panel_median["Threshold"], panel_median[col], c="black", lw=3, label="Median")
+        ax.set_title(f"chr2 Validation {label} v. Thresholds", size="medium")
+        ax.set_xlabel("Threshold", size="medium")
+        ax.set_xlim([0.0, max_threshold])
+        ax.set_ylabel(f"Validation {label}", size="medium")
+
+    # Single shared legend below the grid instead of repeating it on every subplot.
+    # axs[0, 0] (Precision) has both cell-type and Median handles, so it's a
+    # complete source for the legend.
+    handles, labels = axs[0, 0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=min(len(labels), 6), fontsize=9, bbox_to_anchor=(0.5, -0.02))
+
+    fig.suptitle(prefix + " chr2 Validation Performance v. Threshold Calibration")
+    fig.savefig(replace_extension(file_location, prefix + '_' + suffix + ext), bbox_inches="tight", dpi=320)
+
+
 def plot_chromosome_scores_dist(input_bigwig, chrom_name, region_start, region_stop):
     with pyBigWig.open(input_bigwig) as input_bw:
         chr_vals = input_bw.values(chrom_name, region_start, region_stop, numpy=True)

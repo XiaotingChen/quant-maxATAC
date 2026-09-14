@@ -4,7 +4,6 @@ import timeit
 from maxatac.utilities.system_tools import get_dir, Mute
 
 with Mute():
-    from maxatac.utilities.genome_tools import chromosome_blacklist_mask
     from maxatac.utilities.benchmarking_tools import calculate_R2_pearson_spearman, ChromosomeAUPRC
 
 
@@ -39,7 +38,9 @@ def run_benchmarking(args):
 
     logging.info(
         "Benchmarking" +
-        "\n  Prediction file:" + args.prediction +
+        "\n  Prediction file: " + args.prediction +
+        "\n  Alternative prediction file: " + str(args.alternative_prediction) +
+        "\n  Prediction combine operation: " + args.prediction_combine_operation +
         "\n  Gold standard file: " + args.gold_standard +
         "\n  Bin size: " + str(args.bin_size) +
         "\n  Restricting to chromosomes: \n   - " + "\n   - ".join(args.chromosomes) +
@@ -62,7 +63,10 @@ def run_benchmarking(args):
                                           args.agg_function,
                                           results_filename2,
                                           args.blacklist_bw,
-                                          args.quant_gs_null
+                                          args.whitelist_bw,
+                                          args.quant_gs_null,
+                                          alternative_prediction_bw=args.alternative_prediction,
+                                          prediction_combine_operation=args.prediction_combine_operation
                                           )
     else:
         for chromosome in args.chromosomes:
@@ -74,12 +78,18 @@ def run_benchmarking(args):
             ChromosomeAUPRC(args.prediction,
                             args.gold_standard,
                             args.blacklist_bw,
+                            args.whitelist_bw,
                             chromosome,
                             args.bin_size,
                             args.agg_function,
+                            args.agg_threshold,
                             results_filename,
                             args.round_predictions,
-                            plot=args.plot)
+                            plot=args.plot,
+                            peak_based=args.peak_based,
+                            alternative_prediction_bw=args.alternative_prediction,
+                            prediction_combine_operation=args.prediction_combine_operation
+                            )
 
     # Measure End Time of Training
     stopTime = timeit.default_timer()
