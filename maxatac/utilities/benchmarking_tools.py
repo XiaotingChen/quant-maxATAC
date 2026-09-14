@@ -527,7 +527,7 @@ class ChromosomeAUPRC(object):
         # __import_goldstandard_array__), not a per-base score, so it must be
         # divided back down to a per-base average to stay on the same scale as
         # max/mean -- otherwise thresholds derived from this array (and later reused
-        # against it, e.g. in model_interpreting) are off by a factor of ~bin_size.
+        # against it) are off by a factor of ~bin_size.
         if self.agg_function == "sum":
             self.prediction_array = self.prediction_array / self.bin_size
 
