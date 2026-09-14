@@ -198,9 +198,7 @@ def update_reference_genome_paths(args):
     Build path names based on the input reference genome. This function will take an input args Namespace object
     and create a path names based on the input reference genome.
 
-    Paths the user supplied on the command line are kept; the genome bundle only fills
-    in the ones left unset. None of the subparsers give these arguments a default, so an
-    unset value is always None.
+    Paths supplied on the command line are kept; the genome bundle only fills in unset ones.
 
     Args: args Namespace object containing the arguments from the parser
 

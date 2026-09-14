@@ -523,11 +523,8 @@ class ChromosomeAUPRC(object):
                                                          alternative_prediction_stream=self.alternative_prediction_stream,
                                                          combine_operation=self.prediction_combine_operation)
 
-        # Under "sum", the bin value is a base-pair-integrated total (see
-        # __import_goldstandard_array__), not a per-base score, so it must be
-        # divided back down to a per-base average to stay on the same scale as
-        # max/mean -- otherwise thresholds derived from this array (and later reused
-        # against it) are off by a factor of ~bin_size.
+        # Under "sum" the bin value is a base-pair total; divide by bin_size to stay on the
+        # same per-base scale as max/mean.
         if self.agg_function == "sum":
             self.prediction_array = self.prediction_array / self.bin_size
 
