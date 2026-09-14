@@ -105,7 +105,7 @@ TRAIN_SCALE_SIGNAL = (0.9, 1.15)  # min max scaling ranges
 DEFAULT_MIN_PREDICTION = 0.001  # min prediction value to be reported in the output
 DEFAULT_ROUND = 9
 DEFAULT_PREDICTION_BATCH_SIZE = 10000
-OUTPUT_ACTIVATION = "softplus" #"sigmoid"
+OUTPUT_ACTIVATION = "sigmoid"  # binary default; quant models pass --output_activation softplus explicitly
 
 # Benchmarking Constants
 DEFAULT_BENCHMARKING_AGGREGATION_FUNCTION = "max"

@@ -38,7 +38,8 @@ from maxatac.utilities.constants import (DEFAULT_TRAIN_VALIDATE_CHRS,
                                          DEFAULT_BENCHMARKING_AGGREGATION_FUNCTION,
                                          DEFAULT_BENCHMARKING_BIN_SIZE,
                                          ALL_CHRS,
-                                         AUTOSOMAL_CHRS
+                                         AUTOSOMAL_CHRS,
+                                         OUTPUT_ACTIVATION
                                          )
 
 
@@ -428,8 +429,10 @@ def get_parser():
                               dest="output_activation",
                               type=str,
                               required=False,
-                              default="sigmoid",
-                              help="Activation function used for model output layer. Default: sigmoid"
+                              default=OUTPUT_ACTIVATION,
+                              help="Activation function used for model output layer (any Keras activation name, "
+                                   "e.g. sigmoid for binary models, softplus for --quant models). "
+                                   "Default: " + OUTPUT_ACTIVATION
                               )
 
     train_parser.add_argument("--chroms",
@@ -821,12 +824,21 @@ def get_parser():
                                   help="The blacklisted regions to exclude in BigWig format"
                                   )
 
-    benchmark_parser.add_argument("--plot", "--plot",
+    benchmark_parser.add_argument("--plot",
                                   dest="plot",
                                   action="store_true",
                                   default=False,
                                   required=False,
                                   help="Plot PR curve"
+                                  )
+
+    # Deprecated upstream flag kept as a no-op so older command lines still parse (plotting is off by default)
+    benchmark_parser.add_argument("-skip_plot", "--skip_plot",
+                                  dest="skip_plot",
+                                  action="store_true",
+                                  default=False,
+                                  required=False,
+                                  help=argparse.SUPPRESS
                                   )
     #############################################
     # Peaks subparser

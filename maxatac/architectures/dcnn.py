@@ -148,8 +148,6 @@ def get_layer(
     run Conv1DTranspose and Concatenation. Optionally, you
     can skip batch normalization
     """
-    tf.config.experimental_run_functions_eagerly(True) # TODO: for debugging loss fn remove
-
     for i in range(n):
         inbound_layer = Conv1D(
             filters=filters,
@@ -269,12 +267,13 @@ def get_dilated_cnn(
 
     if not quant:
         # Selecting the Loss Function
-        if loss == "cross_entropy":
-            from maxatac.utilities.losses import cross_entropy
-            loss_function = cross_entropy()
+        from maxatac.utilities.losses import cross_entropy
 
-        else:
+        if loss != "cross_entropy":
             logging.info("No loss function selected, selecting default loss function of cross entropy")
+            loss = "cross_entropy"
+
+        loss_function = cross_entropy()
 
         logging.info("You have selected to use the following Loss Function: " + "\n - " + str(loss))
 

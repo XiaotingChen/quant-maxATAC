@@ -2,7 +2,6 @@ import pandas as pd
 
 from maxatac.utilities.system_tools import Mute
 import tensorflow as tf
-import tensorflow_probability as tfp
 import numpy as np
 
 with Mute():
@@ -55,8 +54,8 @@ class cross_entropy(tf.keras.losses.Loss):
         super().__init__(name=name)
         #self.y_true = y_true
         #self.y_pred = y_pred
-        self.y_pred_min = 0.0000001,  # 1e-7
-        self.y_pred_max = 0.9999999,  # 1 - 1e-7
+        self.y_pred_min = 0.0000001  # 1e-7
+        self.y_pred_max = 0.9999999  # 1 - 1e-7
         self.y_true_min = -0.5
 
     def call(self, y_true, y_pred):
@@ -145,6 +144,8 @@ class multinomialnll(tf.keras.losses.Loss):
         #np.savetxt("/Users/war9qi/Project_Data/maxATAC_sample/ELK1_quantitative_output/true_counts_perm.tsv", true_counts_perm, delimiter='\t')
         #np.savetxt("/Users/war9qi/Project_Data/maxATAC_sample/ELK1_quantitative_output/logits_perm.tsv", logits_perm, delimiter='\t')
         
+        import tensorflow_probability as tfp  # optional dependency, only needed for multinomial losses
+
         counts_per_example = tf.reduce_sum(true_counts_perm, axis=-1)
         dist = tfp.distributions.Multinomial(total_count=counts_per_example,
                                                 logits=logits_perm)
@@ -174,6 +175,8 @@ class multinomialnll_mse(tf.keras.losses.Loss):
         logits_perm = y_pred
         true_counts_perm = y_true
 
+
+        import tensorflow_probability as tfp  # optional dependency, only needed for multinomial losses
 
         counts_per_example = tf.reduce_sum(true_counts_perm, axis=-1)
         dist = tfp.distributions.Multinomial(total_count=counts_per_example,

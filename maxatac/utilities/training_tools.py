@@ -288,9 +288,8 @@ def get_target_matrix(binding_stream,
     try:
         # Get the target matrix
         target_vector = np.array(binding_stream.values(chromosome, start, end)).T
-        #import pdb; pdb.set_trace()
         if target_vector.shape[0] == 0:
-            target_vector = np.zeros(1024)
+            target_vector = np.zeros(INPUT_LENGTH)
 
     except:
         # TODO change length of array
@@ -909,8 +908,7 @@ def model_selection_v2(training_history, output_dir):
     epoch = df.iloc[val_loss_min_idx:]["train_val_loss_diff_abs_ratio"].idxmin() + 1
 
     # Get the realpath to the best model
-    best_model = [glob.glob(output_dir + "/*" + str(epoch) + ".h5")[0]]
-    out = pd.DataFrame([best_model], columns=["Best_Model_Path"])
+    out = pd.DataFrame([glob.glob(output_dir + "/*" + str(epoch) + ".h5")], columns=["Best_Model_Path"])
 
     # Write the location of the best model to a file
     out.to_csv(output_dir + "/" + "best_epoch.txt", sep="\t", index=None, header=None)

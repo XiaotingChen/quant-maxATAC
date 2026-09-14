@@ -206,12 +206,13 @@ def run_training(args):
 
     # Select best model
 
-    #best_epoch = model_selection(training_history=training_history,
-    #                             output_dir=maxatac_model.output_directory,
-    #                             quant=args.quant)
-
-    best_epoch = model_selection_v2(
-        training_history=training_history, output_dir=maxatac_model.output_directory)
+    # Binary models keep the maxATAC v1 rule (max val_dice_coef); quant models use the loss-based rule
+    if args.quant:
+        best_epoch = model_selection_v2(training_history=training_history,
+                                        output_dir=maxatac_model.output_directory)
+    else:
+        best_epoch = model_selection(training_history=training_history,
+                                     output_dir=maxatac_model.output_directory)
 
     # If plot then plot the model structure and training metrics
     if args.plot:
