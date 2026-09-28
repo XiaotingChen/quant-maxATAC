@@ -10,7 +10,8 @@ For every cell type listed in the meta file:
 
 1. The prediction bigwig and the binary gold standard bigwig are binned at `--bin_size` (max per bin) on the single held-out chromosome given by `--chromosomes`, excluding blacklisted bins.
 2. A precision-recall curve is computed from the binned prediction scores against the binned gold standard, giving precision, recall, F1 and log2(precision / random precision) for every threshold.
-3. The curve is re-binned on a 0.01 grid of Precision, Recall and F1 values so that each metric value maps to the threshold that achieves it.
+3. Alongside the bin-level Recall, a peak-level **Peak_Recall** is computed per threshold: the fraction of unique ChIP-seq peaks with at least one non-blacklisted bin whose prediction is ≥ the threshold. Peaks are the unique intervals of the optional `ChIP_peaks` BED, or runs of consecutive gold-standard bins when it is not given. Fully blacklisted peaks are not counted.
+4. The curve is re-binned on a 0.01 grid of Precision, Recall, F1 and Peak_Recall values so that each metric value maps to the threshold that achieves it.
 
 The per-metric grids are then combined across cell types by taking the median threshold per grid bin (only thresholds are aggregated, never raw signal), producing the cross-cell-type table. `predict`/`peaks` look up the lowest grid bin that still meets the requested `--cutoff_value` (or the max-F1 bin when `--cutoff_type F1` is used without a value).
 
@@ -22,6 +23,7 @@ A tab-separated file with one row per cell type:
 | -------------- | ---------------------------------------------------------------------------------------------------- |
 | `Prediction`   | Path to the prediction bigwig for this cell type (from `maxatac predict`, quantitative or binary)    |
 | `Binding_File` | Path to the binary gold standard bigwig for this cell type (1 = TF bound, 0 = unbound)               |
+| `ChIP_peaks`   | *(Optional)* ChIP-seq peak BED for this cell type, defining the unique peaks counted by `Peak_Recall`. If the column is missing or a cell is empty, runs of consecutive gold-standard bins are used as peaks (peaks less than one bin apart then merge) |
 
 Additional columns (e.g. `Cell_Line`, `TF`) are ignored. Use validation cell types and a chromosome that were not used to train the model.
 
@@ -35,9 +37,10 @@ maxatac threshold --prefix CTCF --meta_file CTCF_threshold_meta.tsv --chromosome
 
 | Filename                                            | Description                                                                                                              |
 |-----------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------|
-| `<prefix>_cross_celltype.tsv`                       | The calibration table used by `predict`/`peaks`. Columns: `Metric` (`Precision`, `Recall` or `F1`), `Bin` (metric value on the 0.01 grid), `Precision`, `Recall`, `Threshold`, `F1` |
+| `<prefix>_cross_celltype.tsv`                       | The calibration table used by `predict`/`peaks`. Columns: `Metric` (`Precision`, `Recall`, `F1` or `Peak_Recall`), `Bin` (metric value on the 0.01 grid), `Precision`, `Recall`, `Threshold`, `F1`, `Peak_Recall` (fraction of unique ChIP-seq peaks recovered at that threshold) |
 | `<prediction basename>.tsv`                         | The same table for each individual cell type in the meta file                                                            |
-| `*_validationPerformance_vs_thresholdCalibration.png` | Precision, log2FC, recall and F1 vs. threshold for every cell type, with the cross-cell-type median in black          |
+| `<prefix>_peak_recovery.tsv`                        | Per cell type: peak source, number of unique peaks, and `Peak_Recall` at that cell type's own max-F1 threshold and at the cross-cell-type max-F1 threshold |
+| `*_validationPerformance_vs_thresholdCalibration.png` | Precision, recall, F1 and fraction of unique peaks recovered vs. threshold for every cell type, with the cross-cell-type median in black |
 
 ## Required Arguments
 

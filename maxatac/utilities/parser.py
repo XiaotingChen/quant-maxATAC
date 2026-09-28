@@ -398,9 +398,10 @@ def get_parser():
                                 dest="cutoff_type",
                                 default="F1",
                                 type=str,
-                                choices=["Precision", "Recall", "F1"],
+                                choices=["Precision", "Recall", "F1", "Peak_Recall"],
                                 help="Metric whose calibration grid is used to pick the peak calling \
-                                      threshold. Default: F1"
+                                      threshold. Peak_Recall is the fraction of unique ChIP-seq peaks \
+                                      recovered. Default: F1"
                                 )
 
     predict_parser.add_argument("-cv", "-cutoff_value", "--cutoff_value",
@@ -1057,9 +1058,10 @@ def get_parser():
                               dest="cutoff_type",
                               default="F1",
                               type=str,
-                              choices=["Precision", "Recall", "F1"],
+                              choices=["Precision", "Recall", "F1", "Peak_Recall"],
                               help="Metric whose calibration grid is used to pick the peak calling \
-                                    threshold. Default: F1"
+                                    threshold. Peak_Recall is the fraction of unique ChIP-seq peaks \
+                                    recovered. Default: F1"
                               )
 
     peaks_parser.add_argument("-cutoff_value", "--cutoff_value",
@@ -1383,7 +1385,9 @@ def get_parser():
                                   required=True,
                                   help="Tab-separated meta file with one row per cell type and columns 'Prediction' "
                                        "(prediction bigWig, quantitative or binary) and 'Binding_File' (binary gold "
-                                       "standard bigWig)."
+                                       "standard bigWig). Optional column 'ChIP_peaks' (ChIP-seq peak BED) defines the "
+                                       "unique peaks for the Peak_Recall (% of peaks recovered) metric; without it, "
+                                       "runs of consecutive gold-standard bins are used."
                                   )
 
     return general_parser

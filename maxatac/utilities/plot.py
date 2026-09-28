@@ -259,26 +259,32 @@ def export_prc(precision, recall, file_location, title="Precision Recall Curve",
 
 
 def plot_threshold_calibration_stats(median_curve, cell_type_curves, file_location, prefix,
-                                     suffix="_validationPerformance_vs_thresholdCalibration", ext=".png", style="ggplot"):
+                                     suffix="_validationPerformance_vs_thresholdCalibration", ext=".png", style="ggplot",
+                                     chrom_name="chr2"):
     """
-    Multi-panel plot of Precision, log2(FC), Recall, and F1 vs. Threshold. Each cell type
-    is drawn in color from its own per-metric curve; the median-across-cell-type curve
-    is drawn in black on the Precision/Recall/F1 panels.
+    Multi-panel plot of Precision, Recall, F1 and, when present, Peak_Recall (% of unique
+    ChIP-seq peaks recovered) vs. Threshold. Each cell type is drawn in color from its own
+    per-metric curve; the median-across-cell-type curve is drawn in black on every panel.
 
-    median_curve: DataFrame with Metric/Precision/Recall/Threshold/log2FC/F1 columns.
+    median_curve: DataFrame with Metric/Precision/Recall/Threshold/F1 (+ Peak_Recall) columns.
     cell_type_curves: list of {'name': str, 'curves': {'Precision': DataFrame,
-      'Recall': DataFrame, 'F1': DataFrame}}.
+      'Recall': DataFrame, 'F1': DataFrame (, 'Peak_Recall': DataFrame)}}.
     """
     plt.style.use(style)
+    has_peak_recall = (median_curve["Metric"] == "Peak_Recall").any() and \
+        all("Peak_Recall" in ct["curves"] for ct in cell_type_curves)
     fig, axs = plt.subplots(nrows=2, ncols=2, figsize=(15, 12))
 
     # (axis, column, label, median_curve Metric for the black line; None = no black line)
     panels = [
         (axs[0, 0], "Precision", "Precision", "Precision"),
-        (axs[0, 1], "log2FC", "log2(FC)", None),
-        (axs[1, 0], "Recall", "Recall", "Recall"),
-        (axs[1, 1], "F1", "F1 Score", "F1"),
+        (axs[0, 1], "Recall", "Recall", "Recall"),
+        (axs[1, 0], "F1", "F1 Score", "F1"),
     ]
+    if has_peak_recall:
+        panels.append((axs[1, 1], "Peak_Recall", "Fraction of Unique Peaks Recovered", "Peak_Recall"))
+    else:
+        axs[1, 1].axis("off")
 
     n_curves = max(len(cell_type_curves), 1)
     colors = plt.cm.rainbow(np.linspace(0, 1, n_curves))
@@ -298,7 +304,7 @@ def plot_threshold_calibration_stats(median_curve, cell_type_curves, file_locati
         if metric_filter is not None:
             panel_median = median_curve[median_curve["Metric"] == metric_filter].sort_values("Threshold")
             ax.plot(panel_median["Threshold"], panel_median[col], c="black", lw=3, label="Median")
-        ax.set_title(f"chr2 Validation {label} v. Thresholds", size="medium")
+        ax.set_title(f"{chrom_name} Validation {label} v. Thresholds", size="medium")
         ax.set_xlabel("Threshold", size="medium")
         ax.set_xlim([0.0, max_threshold])
         ax.set_ylabel(f"Validation {label}", size="medium")
@@ -307,7 +313,7 @@ def plot_threshold_calibration_stats(median_curve, cell_type_curves, file_locati
     handles, labels = axs[0, 0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="lower center", ncol=min(len(labels), 6), fontsize=9, bbox_to_anchor=(0.5, -0.02))
 
-    fig.suptitle(prefix + " chr2 Validation Performance v. Threshold Calibration")
+    fig.suptitle(f"{prefix} {chrom_name} Validation Performance v. Threshold Calibration")
     fig.savefig(replace_extension(file_location, prefix + '_' + suffix + ext), bbox_inches="tight", dpi=320)
 
 
