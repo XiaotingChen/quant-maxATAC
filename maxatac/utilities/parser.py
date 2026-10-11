@@ -149,6 +149,17 @@ def get_parser():
                                   "Default: " + MAXATAC_DATA_REPO
                              )
 
+    data_parser.add_argument("--data_version",
+                             dest="data_version",
+                             type=str,
+                             default=None,
+                             required=False,
+                             help="Tag or branch of the data repository to install (e.g. v2.0.0b1), or 'latest' "
+                                  "for the newest commit on its default branch. Default: the tag matching this "
+                                  "quant-maxATAC version (" + get_version() + "); development versions and "
+                                  "versions without a matching tag install the latest data."
+                             )
+
     data_parser.add_argument("-y", "--yes",
                              dest="yes",
                              action="store_true",

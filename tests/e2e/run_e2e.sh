@@ -14,6 +14,7 @@
 #   TF          TF to predict (model from `maxatac data`)   Default: CTCF
 #   ROI_START   start of the chr1 slice                     Default: 1000000
 #   ROI_END     end of the chr1 slice                       Default: 11000000
+#   DATA_VERSION  data repository tag/branch for `maxatac data --data_version`  Default: matches the code version
 #   SKIP_DATA   1 = reuse the installed data, skip `maxatac data`
 set -euo pipefail
 
@@ -47,7 +48,7 @@ done
 
 echo "::group::maxatac data"
 if [ "${SKIP_DATA:-0}" != "1" ]; then
-    maxatac data --genome "${GENOME}" --yes
+    maxatac data --genome "${GENOME}" --yes ${DATA_VERSION:+--data_version "${DATA_VERSION}"}
 fi
 ${CHECK} data --data_dir "${DATA_DIR}" --genome "${GENOME}" --tf "${TF}"
 echo "::endgroup::"
