@@ -48,8 +48,9 @@ def describe_existing_data(data_dir):
     if model_files:
         n_tfs = len({os.path.dirname(model_file) for model_file in model_files})
 
-        # quant-maxATAC model files carry "quant" in their name; anything else is most likely a v1 (binary) model
-        n_v1 = len([model_file for model_file in model_files if "quant" not in os.path.basename(model_file).lower()])
+        # quant-maxATAC ships a <TF>_cross_celltype.tsv calibration table next to each model; v1 (binary) models do not
+        n_v1 = len([model_file for model_file in model_files
+                    if not glob.glob(os.path.join(os.path.dirname(model_file), "*_cross_celltype.tsv"))])
 
         lines.append(f"  Models: {len(model_files)} .h5 files for {n_tfs} TFs" +
                      (f", {n_v1} of which look like maxATAC v1 (binary) models" if n_v1 else ""))
