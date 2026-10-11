@@ -5,14 +5,18 @@ name: CI
 
 on:
   push:
+    # Branches only: release tags run this through release.yml
+    branches: ["**"]
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # github.workflow is the caller's name when called from release.yml, so a release never cancels a branch run
+  group: ${{ github.workflow }}-ci-${{ github.ref }}
   cancel-in-progress: true
 
 env:

@@ -190,6 +190,10 @@ def report(args):
 
     print(summary)
 
+    # Also kept as a file: release.yml puts it in the GitHub Release notes
+    with open(os.path.splitext(args.metrics_out)[0] + ".md", "w") as summary_file:
+        summary_file.write(summary)
+
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as step_summary:
             step_summary.write(summary + "\n")

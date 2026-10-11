@@ -1,0 +1,110 @@
+name: Release
+
+# Push a version tag to release, e.g.
+#   git tag -a v2.0.0b2 -m "q-maxATAC v2 preview 2" && git push xc v2.0.0b2
+#
+# 1. Runs CI and the end-to-end test on the tagged commit, the latter with the data repository tag of the same
+#    name (`maxatac data --data_version <tag>`): tag MiraldiLab/quant-maxATAC_data first, or the release fails
+# 2. Builds the sdist and wheel and checks their version matches the tag
+# 3. Creates a GitHub Release with the packages, the e2e metrics in the notes and the benchmark files attached.
+#    a/b/rc tags (v2.0.0b2, v2.0.0rc1) are marked as pre-releases
+#
+# Tags must be PEP 440 versions with a leading "v": v2.0.0, v2.0.0b1, v2.0.0rc1. Never move or reuse a tag.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  e2e:
+    uses: ./.github/workflows/e2e.yml
+    with:
+      data_version: ${{ github.ref_name }}
+
+  build:
+    name: Build packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history and tags: setup.py reads the version from the tag on this commit
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          twine check dist/*
+
+      - name: Check the version matches the tag
+        # Catches tags that are not PEP 440 versions (e.g. v2.0.0-preview.1 would be built as 2.0.0rc1)
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          ls dist
+          if [ ! -f "dist/maxatac-${version}.tar.gz" ]; then
+            echo "::error::Built packages do not have version ${version} from tag ${GITHUB_REF_NAME}"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          retention-days: 14
+
+  release:
+    name: GitHub Release
+    needs: [ci, e2e, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: e2e-outputs
+          path: e2e_out
+
+      - name: Write release notes
+        run: |
+          {
+            echo "quant-maxATAC ${GITHUB_REF_NAME}, tested with [quant-maxATAC_data ${GITHUB_REF_NAME}](https://github.com/MiraldiLab/quant-maxATAC_data/tree/${GITHUB_REF_NAME})."
+            echo
+            echo "Install: \`pip install https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/$(cd dist && ls *.whl)\`, then \`maxatac data\` installs the matching models."
+            echo
+            cat e2e_out/metrics.md
+          } > notes.md
+          cat notes.md
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          prerelease=""
+          if [[ "${GITHUB_REF_NAME}" =~ (a|b|rc)[0-9]+$ ]]; then prerelease="--prerelease"; fi
+
+          gh release create "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "quant-maxATAC ${GITHUB_REF_NAME}" \
+            --notes-file notes.md \
+            --generate-notes \
+            ${prerelease} \
+            dist/* \
+            e2e_out/metrics.json \
+            e2e_out/benchmark/*.tsv \
+            e2e_out/benchmark/*.png

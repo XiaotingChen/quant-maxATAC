@@ -10,6 +10,18 @@ on:
     branches: [main, "quant*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      data_version:
+        description: "Data repository tag or branch (`maxatac data --data_version`); empty = match the code version"
+        required: false
+        default: ""
+  workflow_call:
+    # release.yml passes the release tag, so a release is tested with the data of the same tag
+    inputs:
+      data_version:
+        type: string
+        required: false
+        default: ""
   schedule:
     # Weekly, to catch changes in the data repositories and in unpinned dependencies
     - cron: "0 6 * * 1"
@@ -18,11 +30,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: e2e-${{ github.ref }}
+  # github.workflow is the caller's name when called from release.yml, so a release never cancels a branch run
+  group: ${{ github.workflow }}-e2e-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   TEST_DATA_REPO: XiaotingChen/quant-maxATAC_test_data
+  DATA_VERSION: ${{ inputs.data_version }}
   TF_CPP_MIN_LOG_LEVEL: "2"
   CUDA_VISIBLE_DEVICES: ""
 

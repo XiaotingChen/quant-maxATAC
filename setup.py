@@ -58,7 +58,7 @@ def get_version():
 
 def get_description():
     README = os.path.join(HERE, "README.md")
-    with open(README, "r") as f:
+    with open(README, "r", encoding="utf-8") as f:
         return f.read()
 
 setup(
