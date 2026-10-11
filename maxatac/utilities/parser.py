@@ -106,7 +106,8 @@ def get_parser():
                                 type=str,
                                 default="hg38",
                                 required=False,
-                                help="The reference genome build to use."
+                                help="The reference genome build to use. Can be given before or after the subcommand. "
+                                     "Default: hg38"
                                 )
 
     #############################################
@@ -201,7 +202,7 @@ def get_parser():
     average_parser.add_argument("--genome",
                                 dest="genome",
                                 type=str,
-                                default="hg38",
+                                default=argparse.SUPPRESS,
                                 required=False,
                                 help="The reference genome build to which the input file was aligned."
                                 )
@@ -281,7 +282,7 @@ def get_parser():
     predict_parser.add_argument("--genome",
                                 dest="genome",
                                 type=str,
-                                default="hg38",
+                                default=argparse.SUPPRESS,
                                 required=False,
                                 help="The reference genome build to which the input file was aligned."
                                )
@@ -483,7 +484,7 @@ def get_parser():
     train_parser.add_argument("--genome",
                               dest="genome",
                               type=str,
-                              default="hg38",
+                              default=argparse.SUPPRESS,
                               required=False,
                               help="The reference genome build to which the input file was aligned."
                               )
@@ -747,7 +748,7 @@ def get_parser():
     normalize_parser.add_argument("--genome",
                                   dest="genome",
                                   type=str,
-                                  default="hg38",
+                                  default=argparse.SUPPRESS,
                                   required=False,
                                   help="The reference genome build to use."
                                 )
@@ -949,7 +950,7 @@ def get_parser():
     benchmark_parser.add_argument("--genome",
                                   dest="genome",
                                   type=str,
-                                  default="hg38",
+                                  default=argparse.SUPPRESS,
                                   required=False,
                                   help="The reference genome build to which the input file was aligned."
                                  )
@@ -1139,7 +1140,7 @@ def get_parser():
     variants_parser.add_argument("--genome",
                                  dest="genome",
                                  type=str,
-                                 default="hg38",
+                                 default=argparse.SUPPRESS,
                                  required=False,
                                  help="The reference genome build to which the input file was aligned."
                                  )
@@ -1272,7 +1273,7 @@ def get_parser():
     prepare_parser.add_argument("--genome",
                                 dest="genome",
                                 type=str,
-                                default="hg38",
+                                default=argparse.SUPPRESS,
                                 required=False,
                                 help="The reference genome build to which the input file was aligned."
                                 )
@@ -1361,7 +1362,7 @@ def get_parser():
     threshold_parser.add_argument("--genome",
                                   dest="genome",
                                   type=str,
-                                  default="hg38",
+                                  default=argparse.SUPPRESS,
                                   required=False,
                                   help="The reference genome build to which the input BAM file was aligned."
                                  )
@@ -1372,11 +1373,11 @@ def get_parser():
                                   help="The blacklisted regions to exclude in bigwig format."
                                   )
     
-    # TODO: inherited from upstream main but unused; run_thresholding derives the BED path from --blacklist_bw
     threshold_parser.add_argument("--blacklist_bed",
                                   dest="blacklist_bed",
                                   type=str,
-                                  help="The blacklisted regions to exclude in bigwig format."
+                                  help="The blacklisted regions to exclude in BED format. Default: the .bed file "
+                                       "next to --blacklist_bw."
                                   )
 
     threshold_parser.add_argument("--meta_file",

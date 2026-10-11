@@ -108,9 +108,9 @@ def run_thresholding(args):
     # Create a bedtools object that is a windowed genome
     BED_df_bedtool = pybedtools.BedTool().window_maker(g=args.chrom_sizes, w=args.bin_size)
 
-    # Create a blacklist object form the blacklist bed
-    # TODO: I do not think we need to get the blacklist bed location like this since it is a part of the args now.
-    blacklist_bed_location = ".".join([args.blacklist_bw.split(".")[0],'bed'])
+    # Create a blacklist object form the blacklist bed: --blacklist_bed if given, otherwise the .bed next to --blacklist_bw.
+    # splitext only strips the final extension, so dots elsewhere in the path are kept.
+    blacklist_bed_location = args.blacklist_bed or os.path.splitext(args.blacklist_bw)[0] + ".bed"
     blacklist_bedtool = pybedtools.BedTool(blacklist_bed_location)
 
     # Remove the blacklisted regions from the windowed genome object
