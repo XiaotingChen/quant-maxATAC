@@ -95,7 +95,7 @@ class MaxATACModel(object):
         self.nn_model = self.__get_model()
 
         if interpret:
-            assert (interpret_cell_type is not None, "Set the interpretation cell type argument")
+            assert interpret_cell_type is not None, "Set the interpretation cell type argument"
             self.interpret_cell_type = interpret_cell_type
             self.__get_interpretation_attributes()
 

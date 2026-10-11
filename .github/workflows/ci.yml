@@ -72,5 +72,5 @@ jobs:
         run: flake8 maxatac tests --count --select=E9,F63,F7,F82 --show-source --statistics
 
       - name: Unit tests
-        # The other test modules need the v1 inputs that tests/run_tests.sh downloads into tests/temp
-        run: pytest -v tests/test_benchmark.py tests/test_parser.py
+        # data -> predict -> benchmark on real data is covered by e2e.yml
+        run: pytest -v tests --ignore=tests/e2e
