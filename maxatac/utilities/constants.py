@@ -22,6 +22,13 @@ CPP_LOG_LEVEL = {
 # build maxatac data path
 maxatac_data_path = os.path.join(os.path.expanduser('~'), "opt", "maxatac", "data")
 
+# Reference data + quant-maxATAC models installed by `maxatac data`. It replaces MiraldiLab/maxATAC_data,
+# which holds the binary maxATAC v1 models.
+MAXATAC_DATA_REPO = "https://github.com/MiraldiLab/quant-maxATAC_data.git"
+
+# Where users can ask for the maxATAC v1 (binary) models to be supported again
+V1_MODELS_WISHLIST_URL = "https://github.com/MiraldiLab/quant-maxATAC/issues"
+
 # build processing script path names
 prepare_atac_script_dir = os.path.join(maxatac_data_path, "scripts", "ATAC",
                                        "ATAC_bowtie2_pipeline.sh")  # bulk processing script

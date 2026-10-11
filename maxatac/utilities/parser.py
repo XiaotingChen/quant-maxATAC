@@ -48,7 +48,8 @@ from maxatac.utilities.constants import (DEFAULT_TRAIN_VALIDATE_CHRS,
                                          BINARY_LOSS,
                                          QUANT_LOSS,
                                          QUANT_LOSSES,
-                                         QUANT_TARGET_SCALE_FACTOR
+                                         QUANT_TARGET_SCALE_FACTOR,
+                                         MAXATAC_DATA_REPO
                                          )
 
 
@@ -137,6 +138,23 @@ def get_parser():
                              default=os.path.join(os.path.expanduser('~'), "opt"),
                              required=False,
                              help="Output results directory."
+                             )
+
+    data_parser.add_argument("--data_repo",
+                             dest="data_repo",
+                             type=str,
+                             default=MAXATAC_DATA_REPO,
+                             required=False,
+                             help="Git repository to install the reference data and models from. "
+                                  "Default: " + MAXATAC_DATA_REPO
+                             )
+
+    data_parser.add_argument("-y", "--yes",
+                             dest="yes",
+                             action="store_true",
+                             default=False,
+                             help="Overwrite an existing data directory, including any maxATAC v1 models, "
+                                  "without asking for confirmation."
                              )
 
     data_parser.add_argument("--loglevel",
