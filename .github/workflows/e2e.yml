@@ -44,9 +44,20 @@ jobs:
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends bedtools wget
 
+      - name: Install ushuffle
+        # The PyPI release of ushuffle (a quant-maxATAC dependency) does not build; install it from source first.
+        # --no-build-isolation needs the build tools already installed. If the build fails, retry with Cython < 3.
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install --no-build-isolation git+https://github.com/guma44/ushuffle.git || {
+            echo "::warning::ushuffle build failed; retrying with Cython < 3"
+            pip install "cython<3"
+            pip install --no-build-isolation git+https://github.com/guma44/ushuffle.git
+          }
+          python -c "from ushuffle import shuffle; print(shuffle(b'ACGTACGTAC', 2))"
+
       - name: Install quant-maxATAC
         run: |
-          python -m pip install --upgrade pip
           pip install -e .
 
       # ---- Test inputs: Git LFS files, cached per commit of the test data repository so each
