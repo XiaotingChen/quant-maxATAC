@@ -1405,7 +1405,7 @@ def get_parser():
                                   help="Tab-separated meta file with one row per cell type and columns 'Prediction' "
                                        "(prediction bigWig, quantitative or binary) and 'Binding_File' (binary gold "
                                        "standard bigWig). Optional column 'ChIP_peaks' (ChIP-seq peak BED) defines the "
-                                       "unique peaks for the Peak_Recall (% of peaks recovered) metric; without it, "
+                                       "unique peaks for the Peak_Recall (%% of peaks recovered) metric; without it, "
                                        "runs of consecutive gold-standard bins are used."
                                   )
 
