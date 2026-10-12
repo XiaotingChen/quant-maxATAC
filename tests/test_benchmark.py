@@ -71,3 +71,48 @@ def test_precision_for_recall_collapses_duplicate_recall_to_max_precision():
 
     assert Precision_for_Recall(curve, 0.10) == pytest.approx(0.9)
     assert Precision_for_Recall(curve, 0.15) == pytest.approx(0.7)
+
+
+class _StubGoldStandard:
+    """pyBigWig stand-in returning fixed per-bin stats"""
+
+    def __init__(self, bins):
+        self.bins = bins
+
+    def stats(self, chromosome, start, end, type, nBins, exact):
+        return list(self.bins)
+
+
+def test_random_auprc_counts_gold_standard_bins_inside_the_evaluated_mask(tmp_path):
+    import pandas as pd
+    from maxatac.utilities.benchmarking_tools import ChromosomeAUPRC
+
+    # 200 bins, the first 100 bound. The mask (blacklist and whitelist combined) keeps 10 bins, 2 of them bound
+    gold_standard = np.zeros(200)
+    gold_standard[:100] = 1
+    mask = np.zeros(200, dtype=bool)
+    mask[98:108] = True
+
+    # Bypass __init__ (bigwig I/O) and run the gold standard import and AUPRC steps on in-memory arrays
+    auprc = ChromosomeAUPRC.__new__(ChromosomeAUPRC)
+    auprc.chromosome = "chr1"
+    auprc.chromosome_length = 200 * 200
+    auprc.bin_count = 200
+    auprc.bin_size = 200
+    auprc.agg_function = "max"
+    auprc.agg_threshold = 0.5
+    auprc.peak_based = False
+    auprc.blacklist_mask = mask
+    auprc.goldstandard_stream = _StubGoldStandard(gold_standard)
+    auprc.prediction_array = np.linspace(1, 0, 200)
+    auprc.results_location = str(tmp_path / "chr1_PRC.tsv")
+
+    auprc.__import_goldstandard_array__()
+    auprc.__AUPRC__()
+
+    results = pd.read_csv(auprc.results_location, sep="\t")
+
+    # Before the fix: 100 chromosome-wide positives / 10 evaluated bins = 10
+    assert results["Total_GoldStandard_Bins"].iloc[0] == 2
+    assert results["Random_AUPRC"].iloc[0] == pytest.approx(0.2)
+    assert results["Random_AUPRC"].iloc[0] == pytest.approx(auprc.random_precision)

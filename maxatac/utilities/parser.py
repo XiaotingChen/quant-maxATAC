@@ -214,10 +214,11 @@ def get_parser():
 
 
     # Add optional arguments to the parser
+    # dest must be chrom_sizes: update_reference_genome_paths fills that attribute from --genome when unset
     average_parser.add_argument("-cs", "--chrom_sizes", "--chromosome_sizes",
-                                dest="chromosome_sizes",
+                                dest="chrom_sizes",
                                 type=str,
-                                help="Input chromosome sizes file"
+                                help="Input chromosome sizes file. Default: the chromosome sizes of --genome"
                                 )
 
     average_parser.add_argument("-c", "--chroms", "--chromosomes",

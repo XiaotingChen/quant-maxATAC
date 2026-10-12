@@ -668,16 +668,15 @@ class ChromosomeAUPRC(object):
         self.PR_CURVE_DF["AUPRC"] = self.AUPRC
 
         if self.peak_based==False:
-            # Calculate the total gold standard bins
+            # Count gold standard bins with the same mask as the PR curve (blacklist removed, whitelist applied).
+            # Counting them chromosome wide while dividing by the evaluated bins inflates the random baseline,
+            # above 1 with a small whitelist
             logging.info("Calculate Total GoldStandard Bins")
 
-            self.PR_CURVE_DF["Total_GoldStandard_Bins"] = len(np.argwhere(self.goldstandard_array == True))
+            self.PR_CURVE_DF["Total_GoldStandard_Bins"] = np.count_nonzero(self.goldstandard_array[self.blacklist_mask])
 
-            # Find the number of non-blacklisted bins in chr of interest
-            rand_bins = len(np.argwhere(self.blacklist_mask == True))
-
-            # Random Precision
-            self.PR_CURVE_DF['Random_AUPRC'] = self.PR_CURVE_DF['Total_GoldStandard_Bins'] / rand_bins
+            # Random Precision: gold standard bins / evaluated bins, i.e. self.random_precision
+            self.PR_CURVE_DF['Random_AUPRC'] = self.random_precision
 
             # Log2FC
             self.PR_CURVE_DF['log2FC_AUPRC_Random_AUPRC'] = np.log2(self.PR_CURVE_DF["AUPRC"] / self.PR_CURVE_DF["Random_AUPRC"])
