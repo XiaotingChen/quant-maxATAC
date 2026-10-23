@@ -868,7 +868,8 @@ def get_parser():
 
     # Add arguments to the parser
     # Add arguments to the parser
-    benchmark_prediction_filetype = benchmark_parser.add_mutually_exclusive_group(required=True)
+    # Required unless --random (checked in parse_arguments): the random baselines do not read the prediction
+    benchmark_prediction_filetype = benchmark_parser.add_mutually_exclusive_group(required=False)
 
     benchmark_prediction_filetype.add_argument("-bed", "--bed",
                                                dest="prediction",
@@ -928,6 +929,16 @@ def get_parser():
                                   help="Compute the precision-recall curve on gold-standard peak membership (a peak "
                                        "counts as recovered once any of its bins is predicted) instead of per bin. "
                                        "Binary benchmark only."
+                                  )
+
+    benchmark_parser.add_argument("--random",
+                                  dest="random",
+                                  action='store_true',
+                                  default=False,
+                                  help="With --peak_based, compute only the random baselines, Random AUP-UCPeR and "
+                                       "Random P@10%%UCPeR, from the gold standard, bin size and blacklist/whitelist. "
+                                       "The prediction is not read, so --bw/--bed is optional. Writes "
+                                       "<prefix>_<chromosome>_<bin_size>bp_random_UCPeR.tsv instead of the PRC file."
                                   )
 
     benchmark_parser.add_argument("--quant",
@@ -1478,6 +1489,16 @@ def parse_arguments(argsl, cwd_abs_path=None):
         # parse_known_args would otherwise silently drop the extras with nargs=1
         parser.error("threshold calibrates on exactly one chromosome; got --chromosomes "
                      + " ".join(args.chromosomes))
+
+    if args.func == run_benchmarking:
+        if args.random and not args.peak_based:
+            parser.error("--random requires --peak_based")
+
+        if args.random and args.quant:
+            parser.error("--random is for the peak-based binary benchmark; it cannot be combined with --quant")
+
+        if not args.random and not args.prediction:
+            parser.error("one of the arguments -bed/--bed --bw/--bigwig/-bw is required")
 
     if args.func == run_benchmarking and args.quant:
         missing = [flag for flag, value in (("--quant_gold_standard", args.quant_gold_standard),

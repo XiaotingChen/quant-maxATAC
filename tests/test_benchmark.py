@@ -116,3 +116,168 @@ def test_random_auprc_counts_gold_standard_bins_inside_the_evaluated_mask(tmp_pa
     assert results["Total_GoldStandard_Bins"].iloc[0] == 2
     assert results["Random_AUPRC"].iloc[0] == pytest.approx(0.2)
     assert results["Random_AUPRC"].iloc[0] == pytest.approx(auprc.random_precision)
+
+
+def _peak_gold_standard(peak_sizes, gap, rng):
+    """Boolean bins: peaks of the given sizes separated by random negative gaps of at least 1 bin"""
+    bins = []
+    for size in peak_sizes:
+        bins += [False] * int(rng.integers(1, gap + 1)) + [True] * size
+    return np.array(bins + [False] * gap)
+
+
+def test_random_aup_ucper_matches_mean_of_random_rankings():
+    from maxatac.utilities.benchmarking_tools import (peak_gs_array_to_member_array,
+                                                      precision_recall_curve_peak_based,
+                                                      random_aup_ucper)
+    from sklearn import metrics
+
+    # The analytic curve is the expected curve, so it is about 1/peaks below the mean of shuffled
+    # rankings (8% at 20 peaks). Use 500 peaks so that bias is well under the tolerance
+    rng = np.random.default_rng(0)
+    member = peak_gs_array_to_member_array(_peak_gold_standard([1, 2, 3, 5, 8] * 100, 30, rng))
+
+    simulated = []
+    for _ in range(100):
+        precision, recall, _ = precision_recall_curve_peak_based(member, rng.random(len(member)))
+        simulated.append(metrics.auc(x=recall[:-1], y=precision[:-1]))
+
+    assert random_aup_ucper(member) == pytest.approx(np.mean(simulated), rel=0.05)
+
+
+def test_random_aup_ucper_is_flat_bin_level_baseline_for_single_bin_peaks():
+    from maxatac.utilities.benchmarking_tools import peak_gs_array_to_member_array, random_aup_ucper
+
+    gold_standard = _peak_gold_standard([1] * 25, 10, np.random.default_rng(1))
+    member = peak_gs_array_to_member_array(gold_standard)
+
+    # Flat at P/N; the curve starts at recall 1/N rather than 0, hence the small tolerance
+    assert random_aup_ucper(member) == pytest.approx(gold_standard.mean(), rel=0.01)
+
+
+def test_random_aup_ucper_lies_between_end_and_start_precision():
+    from maxatac.utilities.benchmarking_tools import peak_gs_array_to_member_array, random_aup_ucper
+
+    gold_standard = _peak_gold_standard([4, 10, 20, 6] * 5, 40, np.random.default_rng(2))
+    member = peak_gs_array_to_member_array(gold_standard)
+    n_peaks = len(np.unique(member[member > 0]))
+    n_negative = np.count_nonzero(member < 0)
+
+    assert n_peaks / (n_peaks + n_negative) < random_aup_ucper(member) < gold_standard.mean()
+
+
+def test_random_precision_at_ucper_matches_mean_of_random_rankings():
+    from maxatac.utilities.benchmarking_tools import (Precision_for_Recall,
+                                                      peak_gs_array_to_member_array,
+                                                      precision_recall_curve_peak_based,
+                                                      random_precision_at_ucper)
+    import pandas as pd
+
+    rng = np.random.default_rng(3)
+    member = peak_gs_array_to_member_array(_peak_gold_standard([1, 2, 3, 5, 8] * 100, 30, rng))
+
+    simulated = []
+    for _ in range(100):
+        precision, recall, _ = precision_recall_curve_peak_based(member, rng.random(len(member)))
+        curve = pd.DataFrame({"Precision": precision[:-1], "Recall": recall[:-1]})
+        simulated.append(Precision_for_Recall(curve, 0.1))
+
+    assert random_precision_at_ucper(member, 0.1) == pytest.approx(np.mean(simulated), rel=0.03)
+
+
+def test_peak_based_auprc_writes_random_baselines(tmp_path):
+    import pandas as pd
+    from maxatac.utilities.benchmarking_tools import (ChromosomeAUPRC, peak_gs_array_to_member_array,
+                                                      random_aup_ucper, random_precision_at_ucper)
+
+    gold_standard = _peak_gold_standard([1, 2, 3, 5, 8] * 20, 30, np.random.default_rng(4)).astype(float)
+    n_bins = len(gold_standard)
+
+    auprc = ChromosomeAUPRC.__new__(ChromosomeAUPRC)
+    auprc.chromosome = "chr1"
+    auprc.chromosome_length = n_bins * 200
+    auprc.bin_count = n_bins
+    auprc.bin_size = 200
+    auprc.agg_function = "max"
+    auprc.agg_threshold = 0.5
+    auprc.peak_based = True
+    auprc.blacklist_mask = np.ones(n_bins, dtype=bool)
+    auprc.goldstandard_stream = _StubGoldStandard(gold_standard)
+    auprc.prediction_array = np.random.default_rng(5).random(n_bins) + gold_standard
+    auprc.results_location = str(tmp_path / "chr1_PRC.tsv")
+
+    auprc.__import_goldstandard_array__()
+    auprc.__AUPRC__()
+
+    results = pd.read_csv(auprc.results_location, sep="\t").iloc[0]
+    member = peak_gs_array_to_member_array(gold_standard > 0)
+
+    assert results["Total_GoldStandard_Peaks"] == 100
+    assert results["Random_AUPRC"] == pytest.approx(random_aup_ucper(member))
+    assert results["Random_Precision_at_10_Percent_Recall"] == pytest.approx(random_precision_at_ucper(member, 0.1))
+    assert results["log2FC_Precision_at_10_Percent_Recall_Random"] == pytest.approx(
+        np.log2(results["Precision_at_10_Percent_Recall"] / results["Random_Precision_at_10_Percent_Recall"]))
+
+
+class _StubGoldStandardBigWig(_StubGoldStandard):
+    """pyBigWig stand-in with a chromosome size, for running ChromosomeAUPRC.__init__"""
+
+    def chroms(self, chromosome):
+        return len(self.bins) * 200
+
+
+def test_random_only_writes_just_the_two_random_baselines_without_reading_the_prediction(tmp_path, monkeypatch):
+    import pandas as pd
+    from maxatac.utilities import benchmarking_tools
+    from maxatac.utilities.benchmarking_tools import (ChromosomeAUPRC, peak_gs_array_to_member_array,
+                                                      random_aup_ucper, random_precision_at_ucper)
+
+    gold_standard = _peak_gold_standard([1, 2, 3, 5, 8] * 20, 30, np.random.default_rng(6)).astype(float)
+    n_bins = len(gold_standard)
+    # Blacklist the first 50 bins: the baselines must use the masked gold standard only
+    mask = np.ones(n_bins, dtype=bool)
+    mask[:50] = False
+
+    opened = []
+
+    def load_bigwig(path):
+        opened.append(path)
+        return _StubGoldStandardBigWig(gold_standard)
+
+    monkeypatch.setattr(benchmarking_tools, "load_bigwig", load_bigwig)
+    monkeypatch.setattr(benchmarking_tools, "chromosome_blacklist_mask", lambda *args: mask)
+
+    results_location = str(tmp_path / "test_chr1_200bp_random_UCPeR.tsv")
+    ChromosomeAUPRC(None, "gold_standard.bw", "blacklist.bw", None, "chr1", 200, "max", 0.5,
+                    results_location, 9, peak_based=True, random_only=True)
+
+    results = pd.read_csv(results_location, sep="\t")
+    member = peak_gs_array_to_member_array(gold_standard[mask] > 0)
+
+    assert opened == ["gold_standard.bw"]
+    assert list(results.columns) == ["Random_AUPRC", "Random_Precision_at_10_Percent_Recall"]
+    assert len(results) == 1
+    assert results["Random_AUPRC"].iloc[0] == pytest.approx(random_aup_ucper(member))
+    assert results["Random_Precision_at_10_Percent_Recall"].iloc[0] == pytest.approx(random_precision_at_ucper(member, 0.1))
+
+
+def test_random_only_requires_peak_based():
+    from maxatac.utilities.benchmarking_tools import ChromosomeAUPRC
+
+    with pytest.raises(ValueError, match="peak_based"):
+        ChromosomeAUPRC(None, "gold_standard.bw", None, None, "chr1", 200, "max", 0.5,
+                        "out.tsv", 9, peak_based=False, random_only=True)
+
+
+def test_parse_benchmark_random_needs_no_prediction_but_needs_peak_based():
+    parser_module = pytest.importorskip("maxatac.utilities.parser")
+    base = ["benchmark", "--gold_standard", "average.bigwig", "--name", "benchmark_test"]
+
+    args = parser_module.parse_arguments(base + ["--peak_based", "--random"], DATA_FOLDER)
+    assert args.random and args.peak_based and args.prediction is None
+
+    with pytest.raises(SystemExit):
+        parser_module.parse_arguments(base + ["--random"], DATA_FOLDER)
+
+    with pytest.raises(SystemExit):
+        parser_module.parse_arguments(base + ["--peak_based"], DATA_FOLDER)
