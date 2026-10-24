@@ -100,6 +100,10 @@ class calculate_R2_pearson_spearman(object):
         self.quant_gs_null = quant_gs_null # change to quant_null_model
         self.prediction_combine_operation = prediction_combine_operation
 
+        if prediction_combine_operation == "rank_max":
+            raise ValueError("prediction_combine_operation rank_max is for the precision-recall benchmark only; "
+                             "R2, Pearson and Spearman need prediction values, not percentile ranks")
+
         # This has been modified
         self.blacklist_mask = chromosome_blacklist_mask(blacklist_bw,
                                                         self.chromosome,
@@ -627,8 +631,10 @@ class ChromosomeAUPRC(object):
                                                          combine_operation=self.prediction_combine_operation)
 
         # Under "sum" the bin value is a base-pair total; divide by bin_size to stay on the
-        # same per-base scale as max/mean.
-        if self.agg_function == "sum":
+        # same per-base scale as max/mean. rank_max is already a percentile, and dividing it would let
+        # the rounding below merge neighbouring ranks into ties
+        if self.agg_function == "sum" and not (self.alternative_prediction_stream is not None
+                                               and self.prediction_combine_operation == "rank_max"):
             self.prediction_array = self.prediction_array / self.bin_size
 
         self.prediction_array = np.round(self.prediction_array, round_prediction)

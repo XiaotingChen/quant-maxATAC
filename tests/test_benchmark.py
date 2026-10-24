@@ -281,3 +281,122 @@ def test_parse_benchmark_random_needs_no_prediction_but_needs_peak_based():
 
     with pytest.raises(SystemExit):
         parser_module.parse_arguments(base + ["--peak_based"], DATA_FOLDER)
+
+
+def test_pct_rank_gives_tied_bins_the_lowest_rank_and_zero_or_missing_bins_zero():
+    from maxatac.utilities.genome_tools import _pct_rank
+
+    # 6 bins: a zero, a NaN, a tie at 0.5, 0.2 and 0.9
+    percentile = _pct_rank(np.array([0.0, np.nan, 0.5, 0.5, 0.2, 0.9]))
+
+    # rankdata(min) over [0, 0, 0.5, 0.5, 0.2, 0.9] -> [1, 1, 4, 4, 3, 6], / 6; zero and NaN bins forced to 0
+    np.testing.assert_allclose(percentile, np.array([0, 0, 4, 4, 3, 6]) / 6)
+
+
+def test_rank_max_takes_the_max_percentile_and_falls_back_to_the_other_track():
+    from maxatac.utilities.genome_tools import combine_prediction_arrays
+
+    # Model scores are small, the average ChIP signal is large: a raw max would always pick the average
+    model = np.array([0.01, 0.02, 0.03, np.nan, 0.0, 0.04])
+    average = np.array([10.0, 50.0, 0.0, 30.0, 20.0, 40.0])
+
+    combined = combine_prediction_arrays(model, average, combine_operation="rank_max")
+
+    # model percentiles:   [3, 4, 5, 0, 0, 6] / 6   (NaN and zero bins -> 0)
+    # average percentiles: [2, 6, 0, 4, 3, 5] / 6   (zero bin -> 0)
+    np.testing.assert_allclose(combined, np.array([3, 6, 5, 4, 3, 6]) / 6)
+    np.testing.assert_allclose(combine_prediction_arrays(model, average, combine_operation="max"),
+                               np.array([10.0, 50.0, 0.03, 30.0, 20.0, 40.0]))
+
+
+def test_rank_max_with_all_zero_or_missing_bins_scores_them_zero():
+    from maxatac.utilities.genome_tools import combine_prediction_arrays
+
+    combined = combine_prediction_arrays(np.array([np.nan, 0.0, 0.3]), np.array([0.0, np.nan, np.nan]),
+                                         combine_operation="rank_max")
+
+    np.testing.assert_allclose(combined, np.array([0.0, 0.0, 1.0]))
+
+
+def test_rank_max_logs_how_often_each_track_supplies_the_max(caplog):
+    import logging
+    from maxatac.utilities.genome_tools import combine_prediction_arrays
+
+    with caplog.at_level(logging.INFO):
+        combine_prediction_arrays(np.array([0.01, 0.02, 0.03, np.nan, 0.0, 0.04]),
+                                  np.array([10.0, 50.0, 0.0, 30.0, 20.0, 40.0]),
+                                  combine_operation="rank_max")
+
+    # From the percentiles above: model wins bins 1, 3, 6 and the average wins bins 2, 4, 5
+    assert "primary supplies the max in 50.00% of bins, alternative in 50.00%, tied in 0.00%" in caplog.text
+
+
+class _StubPredictionBigWig(_StubGoldStandardBigWig):
+    """pyBigWig stand-in for a prediction track; keeps NaN for missing bins like import_bigwig_stats_array expects"""
+
+
+def test_chromosome_auprc_benchmarks_the_rank_max_ensemble(tmp_path, monkeypatch):
+    import pandas as pd
+    from maxatac.utilities import benchmarking_tools
+    from maxatac.utilities.benchmarking_tools import ChromosomeAUPRC
+    from maxatac.utilities.genome_tools import combine_prediction_arrays
+
+    rng = np.random.default_rng(7)
+    gold_standard = _peak_gold_standard([1, 2, 3] * 30, 20, rng).astype(float)
+    n_bins = len(gold_standard)
+
+    # Model: weak signal on peaks, missing on 5% of bins. Average ChIP: large values, zero on 40% of bins
+    model = rng.random(n_bins) * 0.1 + 0.05 * gold_standard
+    model[rng.random(n_bins) < 0.05] = np.nan
+    average = rng.random(n_bins) * 100 * (rng.random(n_bins) > 0.4)
+
+    streams = {"model.bw": _StubPredictionBigWig(model),
+               "average.bw": _StubPredictionBigWig(average),
+               # --agg sum returns base-pair totals: 200 for a fully covered 200 bp bin
+               "gold_standard.bw": _StubGoldStandardBigWig(gold_standard * 200)}
+    monkeypatch.setattr(benchmarking_tools, "load_bigwig", lambda path: streams[path])
+    # Blacklist bins 0-19, whitelist everything else but the last 10 bins
+    keep = np.ones(n_bins, dtype=bool)
+    keep[:20] = False
+    monkeypatch.setattr(benchmarking_tools, "chromosome_blacklist_mask", lambda *args: keep)
+    whitelist = np.ones(n_bins, dtype=bool)
+    whitelist[-10:] = False
+    monkeypatch.setattr(benchmarking_tools, "chromosome_whitelist_mask", lambda *args: whitelist)
+
+    auprc = ChromosomeAUPRC("model.bw", "gold_standard.bw", "blacklist.bw", "whitelist.bw", "chr1", 200, "sum", 0.5,
+                            str(tmp_path / "chr1_PRC.tsv"), 9, peak_based=True,
+                            alternative_prediction_bw="average.bw", prediction_combine_operation="rank_max")
+
+    # Combined on all bins before masking, and not divided by bin_size under --agg sum
+    expected = np.round(combine_prediction_arrays(model, average, combine_operation="rank_max"), 9)
+    np.testing.assert_allclose(auprc.prediction_array, expected)
+    assert auprc.prediction_array.max() <= 1.0
+
+    np.testing.assert_array_equal(auprc.blacklist_mask, keep & whitelist)
+    results = pd.read_csv(tmp_path / "chr1_PRC.tsv", sep="\t")
+    assert 0 < results["AUPRC"].iloc[0] <= 1
+
+
+def test_quant_benchmark_rejects_rank_max(monkeypatch):
+    from maxatac.utilities import benchmarking_tools
+
+    stub = _StubGoldStandardBigWig(np.zeros(10))
+    monkeypatch.setattr(benchmarking_tools, "load_bigwig", lambda path: stub)
+
+    with pytest.raises(ValueError, match="rank_max"):
+        benchmarking_tools.calculate_R2_pearson_spearman("model.bw", "gs.bw", "quant_gs.bw", "chr1", 200, "mean",
+                                                         "out.tsv", None, None, "null.bw",
+                                                         alternative_prediction_bw="average.bw",
+                                                         prediction_combine_operation="rank_max")
+
+
+def test_parse_benchmark_rank_max_is_rejected_with_quant():
+    parser_module = pytest.importorskip("maxatac.utilities.parser")
+    base = ["benchmark", "--bw", "model.bw", "--alternative_prediction", "average.bw",
+            "--gold_standard", "gs.bw", "--name", "benchmark_test", "--prediction_combine_operation", "rank_max"]
+
+    assert parser_module.parse_arguments(base + ["--peak_based"], DATA_FOLDER).prediction_combine_operation == "rank_max"
+
+    with pytest.raises(SystemExit):
+        parser_module.parse_arguments(base + ["--quant", "--quant_gold_standard", "q.bw", "--quant_gs_null", "n.bw"],
+                                      DATA_FOLDER)

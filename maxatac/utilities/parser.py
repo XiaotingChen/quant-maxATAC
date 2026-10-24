@@ -893,9 +893,12 @@ def get_parser():
     benchmark_parser.add_argument("--prediction_combine_operation",
                                   dest="prediction_combine_operation",
                                   type=str,
-                                  choices=["mean", "max"],
+                                  choices=["mean", "max", "rank_max"],
                                   default="mean",
-                                  help="How to combine bins from the primary and alternative prediction bigWig files when both provide a value. Default: mean"
+                                  help="How to combine bins from the primary and alternative prediction bigWig files. "
+                                       "mean / max combine raw values where both provide one. rank_max converts each "
+                                       "track to per-chromosome percentile ranks (zero and missing bins get 0) and "
+                                       "takes the max; precision-recall benchmark only, not with --quant. Default: mean"
                                   )
 
     benchmark_parser.add_argument("--quant_gold_standard",
@@ -1493,6 +1496,10 @@ def parse_arguments(argsl, cwd_abs_path=None):
     if args.func == run_benchmarking:
         if args.random and not args.peak_based:
             parser.error("--random requires --peak_based")
+
+        if args.quant and args.prediction_combine_operation == "rank_max":
+            parser.error("--prediction_combine_operation rank_max is for the precision-recall benchmark; "
+                         "it cannot be combined with --quant")
 
         if args.random and args.quant:
             parser.error("--random is for the peak-based binary benchmark; it cannot be combined with --quant")
